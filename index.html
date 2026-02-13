@@ -1121,8 +1121,22 @@
       </svg>
       <span>Stats</span>
     </div>
-    <div class="mobile-nav-item" onclick="showPage('calendar')">
+    <div class="mobile-nav-item" onclick="toggleMobileMenu()">
       <svg class="icon-outline" viewBox="0 0 24 24">
+        <line x1="3" y1="12" x2="21" y2="12"></line>
+        <line x1="3" y1="6" x2="21" y2="6"></line>
+        <line x1="3" y1="18" x2="21" y2="18"></line>
+      </svg>
+      <span>More</span>
+    </div>
+  </div>
+</div>
+
+<!-- Mobile More Menu -->
+<div id="mobile-more-menu" style="display:none; position:fixed; bottom:65px; left:0; right:0; background:var(--bg-base); border-top:1px solid var(--border); z-index:199; padding:8px 0;">
+  <div style="display:grid; grid-template-columns:1fr 1fr; gap:4px; padding:8px 12px;">
+    <div class="mobile-nav-item" onclick="showPage('calendar'); toggleMobileMenu();" style="flex-direction:row; gap:10px; padding:12px 16px; justify-content:flex-start;">
+      <svg class="icon-outline" viewBox="0 0 24 24" style="width:20px;height:20px;margin:0;">
         <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
         <line x1="16" y1="2" x2="16" y2="6"></line>
         <line x1="8" y1="2" x2="8" y2="6"></line>
@@ -1130,8 +1144,37 @@
       </svg>
       <span>Calendar</span>
     </div>
+    <div class="mobile-nav-item" onclick="showPage('tests'); toggleMobileMenu();" style="flex-direction:row; gap:10px; padding:12px 16px; justify-content:flex-start;">
+      <svg class="icon-outline" viewBox="0 0 24 24" style="width:20px;height:20px;margin:0;">
+        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+        <path d="M14 2v6h6M16 13H8M16 17H8M10 9H8"></path>
+      </svg>
+      <span>Test Log</span>
+    </div>
+    <div class="mobile-nav-item" onclick="toggleTheme(); toggleMobileMenu();" style="flex-direction:row; gap:10px; padding:12px 16px; justify-content:flex-start;">
+      <svg class="icon-outline" viewBox="0 0 24 24" style="width:20px;height:20px;margin:0;">
+        <circle cx="12" cy="12" r="5"></circle>
+        <line x1="12" y1="1" x2="12" y2="3"></line>
+        <line x1="12" y1="21" x2="12" y2="23"></line>
+        <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+        <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+        <line x1="1" y1="12" x2="3" y2="12"></line>
+        <line x1="21" y1="12" x2="23" y2="12"></line>
+        <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+        <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+      </svg>
+      <span>Theme</span>
+    </div>
+    <div class="mobile-nav-item" id="mobile-signin-btn" onclick="signInWithGoogle(); toggleMobileMenu();" style="flex-direction:row; gap:10px; padding:12px 16px; justify-content:flex-start;">
+      <svg class="icon-outline" viewBox="0 0 24 24" style="width:20px;height:20px;margin:0;">
+        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+        <circle cx="12" cy="7" r="4"></circle>
+      </svg>
+      <span>Sign In</span>
+    </div>
   </div>
 </div>
+<div id="mobile-menu-backdrop" onclick="toggleMobileMenu()" style="display:none; position:fixed; inset:0; z-index:198;"></div>
 
 <!-- Main Content -->
 <div id="main">
@@ -1659,6 +1702,14 @@ function continueOffline() {
   setTimeout(() => {
     document.getElementById('sync-status').classList.remove('show');
   }, 3000);
+}
+
+function toggleMobileMenu() {
+  const menu = document.getElementById('mobile-more-menu');
+  const backdrop = document.getElementById('mobile-menu-backdrop');
+  const isOpen = menu.style.display === 'block';
+  menu.style.display = isOpen ? 'none' : 'block';
+  backdrop.style.display = isOpen ? 'none' : 'block';
 }
 
 async function signInWithGoogle() {
