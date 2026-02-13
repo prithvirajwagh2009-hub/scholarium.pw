@@ -1635,17 +1635,7 @@ function initFirebase() {
         const userSection = document.getElementById('user-section');
         if (userSection) userSection.classList.add('hidden');
         
-        // Handle redirect result (mobile sign-in)
-        auth.getRedirectResult().then(result => {
-          if (result && result.user) {
-            toast('Signed in successfully!');
-          } else {
-            showAuthOverlay();
-          }
-        }).catch(err => {
-          console.error("Redirect result error:", err);
-          showAuthOverlay();
-        });
+        showAuthOverlay();
       }
     });
   } catch (error) {
@@ -1686,19 +1676,8 @@ async function signInWithGoogle() {
     }
   } catch (error) {
     console.error("Sign in error:", error);
-    if (error.code === 'auth/popup-blocked') {
-      toast('Popup blocked — trying redirect...');
-      try {
-        const provider = new firebase.auth.GoogleAuthProvider();
-        await auth.signInWithRedirect(provider);
-      } catch (e) {
-        toast('Sign in failed. Continuing offline.');
-        continueOffline();
-      }
-    } else {
-      toast('Sign in failed. Continuing offline.');
-      continueOffline();
-    }
+    toast('Sign in failed: ' + (error.message || 'Unknown error'));
+    continueOffline();
   }
 }
 
