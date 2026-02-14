@@ -243,6 +243,7 @@
   .btn-danger:hover { background:#2a0f0d; border-color:var(--red); }
   .btn-ghost { border-color:transparent; background:transparent; }
   .btn-ghost:hover { background:var(--bg-raised); border-color:var(--border); }
+  .task-filter-btn.active { background:var(--amber-faint); border-color:var(--amber-dim); color:var(--amber-glow); }
 
   /* ── Forms ── */
   .form-row { display:grid; gap:13px; margin-bottom:13px; }
@@ -1280,7 +1281,7 @@
       <p>Keep track of all your assignments and deadlines</p>
     </div>
     
-    <div style="margin-bottom:20px;">
+    <div style="display:flex;gap:10px;margin-bottom:20px;flex-wrap:wrap;align-items:center;">
       <button class="btn btn-primary" onclick="openAddTaskModal()">
         <svg class="icon-outline" viewBox="0 0 24 24" style="width:16px;height:16px;">
           <line x1="12" y1="5" x2="12" y2="19"></line>
@@ -1288,14 +1289,21 @@
         </svg>
         Add Task
       </button>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;">
+        <button class="btn btn-sm task-filter-btn active" onclick="setTaskFilter('all')" data-filter="all">All</button>
+        <button class="btn btn-sm task-filter-btn" onclick="setTaskFilter('today')" data-filter="today">Today</button>
+        <button class="btn btn-sm task-filter-btn" onclick="setTaskFilter('tomorrow')" data-filter="tomorrow">Tomorrow</button>
+        <button class="btn btn-sm task-filter-btn" onclick="setTaskFilter('week')" data-filter="week">This Week</button>
+        <button class="btn btn-sm task-filter-btn" onclick="setTaskFilter('overdue')" data-filter="overdue">Overdue</button>
+      </div>
     </div>
 
     <div class="card">
-      <div class="card-title">Active Tasks</div>
+      <div class="card-title" id="task-list-title">Active Tasks</div>
       <div id="task-list-active"></div>
     </div>
 
-    <div class="card" style="margin-top:20px;">
+    <div class="card" style="margin-top:20px;" id="task-done-card">
       <div class="card-title">Completed Tasks</div>
       <div id="task-list-done"></div>
     </div>
@@ -2196,10 +2204,25 @@ function quickDone(id, checked) {
 // ================================================================
 //  TASK MANAGER
 // ================================================================
-function openAddTaskModal() {
+let currentTaskFilter = 'all';
+
+function setTaskFilter(filter) {
+  currentTaskFilter = filter;
+  document.querySelectorAll('.task-filter-btn').forEach(b => {
+    b.classList.toggle('active', b.dataset.filter === filter);
+  });
+  const titles = {all:'Active Tasks', today:"Today's Tasks", tomorrow:"Tomorrow's Tasks", week:'This Week', overdue:'Overdue Tasks'};
+  document.getElementById('task-list-title').textContent = titles[filter] || 'Active Tasks';
+  // Hide completed card for specific filters
+  const doneCard = document.getElementById('task-done-card');
+  if(doneCard) doneCard.style.display = filter === 'all' ? '' : 'none';
+  renderTasks();
+}
+
+function openAddTaskModal(preDate) {
   document.getElementById('task-title').value = '';
   document.getElementById('task-subject').value = '';
-  document.getElementById('task-due').value = '';
+  document.getElementById('task-due').value = preDate || todayStr();
   document.getElementById('task-priority').value = 'medium';
   document.getElementById('task-notes').value = '';
   document.getElementById('add-task-modal').classList.remove('hidden');
@@ -2230,53 +2253,101 @@ function saveTask() {
 }
 
 function renderTasks() {
-  const tasks = DB.get('tasks');
-  const active = tasks.filter(t=>t.status!=='done').sort((a,b)=>(a.due||'9999')>(b.due||'9999')?1:-1);
-  const done = tasks.filter(t=>t.status==='done').sort((a,b)=>b.created-a.created);
+  const allTasks = DB.get('tasks');
+  const today = todayStr();
+  const tomorrow = (() => { const d = new Date(); d.setDate(d.getDate()+1); return d.toISOString().split('T')[0]; })();
+  const weekEnd = (() => { const d = new Date(); d.setDate(d.getDate()+7); return d.toISOString().split('T')[0]; })();
   
-  // Active tasks
+  const filter = currentTaskFilter || 'all';
+  let active = allTasks.filter(t => t.status !== 'done');
+  
+  // Apply filter
+  if(filter === 'today') active = active.filter(t => t.due === today);
+  else if(filter === 'tomorrow') active = active.filter(t => t.due === tomorrow);
+  else if(filter === 'week') active = active.filter(t => t.due && t.due >= today && t.due <= weekEnd);
+  else if(filter === 'overdue') active = active.filter(t => t.due && t.due < today);
+  
+  active = active.sort((a,b) => (a.due||'9999') > (b.due||'9999') ? 1 : -1);
+  
   const activeEl = document.getElementById('task-list-active');
+  
   if(!active.length) {
-    activeEl.innerHTML = '<div class="empty-state">No active tasks</div>';
+    const emptyMsgs = {
+      all: 'No active tasks — add one above!',
+      today: 'No tasks due today',
+      tomorrow: 'No tasks due tomorrow',
+      week: 'No tasks due this week',
+      overdue: 'No overdue tasks 🎉'
+    };
+    activeEl.innerHTML = `<div class="empty-state">${emptyMsgs[filter]||'No tasks'}</div>`;
   } else {
-    activeEl.innerHTML = active.map(t => {
-      const diff = t.due ? daysFromNow(t.due) : null;
-      let dueColor = 'var(--cream-faint)';
-      if(diff!==null) {
-        if(diff<0) dueColor='#d86058';
-        else if(diff<=2) dueColor='var(--amber)';
-      }
-      const priorityBadge = t.priority==='high' ? '<span style="color:var(--red);font-size:.8rem;">⬆ High</span>' : '';
-      return `<div class="task-item">
-        <input type="checkbox" onchange="toggleTaskStatus('${t.id}')">
-        <div class="task-content">
-          <div class="task-title">${t.title} ${priorityBadge}</div>
-          <div class="task-meta">${t.subject||'General'} • <span style="color:${dueColor}">${t.due?formatDate(t.due):'No due date'}</span></div>
-        </div>
-        <div class="task-actions">
-          <button class="btn btn-sm btn-danger" onclick="deleteTask('${t.id}')">Delete</button>
-        </div>
+    // Group by date
+    const groups = {};
+    active.forEach(t => {
+      const key = t.due || 'no-date';
+      if(!groups[key]) groups[key] = [];
+      groups[key].push(t);
+    });
+    
+    const sortedKeys = Object.keys(groups).sort((a,b) => a > b ? 1 : -1);
+    
+    activeEl.innerHTML = sortedKeys.map(key => {
+      const label = key === 'no-date' ? 'No Due Date' : (() => {
+        const diff = daysFromNow(key);
+        if(diff === 0) return '📌 Today';
+        if(diff === 1) return '📅 Tomorrow';
+        if(diff < 0) return `⚠️ Overdue (${formatDate(key)})`;
+        if(diff <= 7) return `📆 ${new Date(key+'T00:00:00').toLocaleDateString('en-US',{weekday:'long'})} — ${formatDate(key)}`;
+        return `📆 ${formatDate(key)}`;
+      })();
+      
+      const groupTasks = groups[key].map(t => {
+        const diff = t.due ? daysFromNow(t.due) : null;
+        let dueColor = 'var(--cream-faint)';
+        if(diff !== null) {
+          if(diff < 0) dueColor = 'var(--red)';
+          else if(diff <= 2) dueColor = 'var(--amber)';
+        }
+        const priorityBadge = t.priority==='high' 
+          ? '<span style="color:var(--red);font-size:.78rem;margin-left:6px;">⬆ High</span>' 
+          : t.priority==='medium' ? '' : '<span style="color:var(--cream-faint);font-size:.78rem;margin-left:6px;">Low</span>';
+        return `<div class="task-item">
+          <input type="checkbox" onchange="toggleTaskStatus('${t.id}')">
+          <div class="task-content">
+            <div class="task-title">${t.title}${priorityBadge}</div>
+            <div class="task-meta">${t.subject||'General'}${t.notes ? ' • '+t.notes.substring(0,40)+(t.notes.length>40?'…':'') : ''}</div>
+          </div>
+          <div class="task-actions">
+            <button class="btn btn-sm btn-danger" onclick="deleteTask('${t.id}')">✕</button>
+          </div>
+        </div>`;
+      }).join('');
+      
+      return `<div style="margin-bottom:16px;">
+        <div style="font-size:.78rem;font-family:var(--font-mono);color:var(--amber);letter-spacing:.08em;text-transform:uppercase;margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid var(--border);">${label}</div>
+        ${groupTasks}
       </div>`;
     }).join('');
   }
   
-  // Done tasks
+  // Done tasks (only show in 'all' filter)
   const doneEl = document.getElementById('task-list-done');
-  if(!done.length) {
-    doneEl.innerHTML = '<div class="empty-state">No completed tasks yet</div>';
-  } else {
-    doneEl.innerHTML = done.map(t => {
-      return `<div class="task-item task-done">
+  if(doneEl) {
+    const done = allTasks.filter(t=>t.status==='done').sort((a,b)=>b.created-a.created);
+    if(!done.length) {
+      doneEl.innerHTML = '<div class="empty-state">No completed tasks yet</div>';
+    } else {
+      doneEl.innerHTML = done.map(t => `<div class="task-item task-done">
         <input type="checkbox" checked onchange="toggleTaskStatus('${t.id}')">
         <div class="task-content">
           <div class="task-title">${t.title}</div>
           <div class="task-meta">${t.subject||'General'}</div>
         </div>
         <div class="task-actions">
-          <button class="btn btn-sm btn-danger" onclick="deleteTask('${t.id}')">Delete</button>
+          <button class="btn btn-sm btn-danger" onclick="deleteTask('${t.id}')">✕</button>
         </div>
-      </div>`;
-    }).join('');
+      </div>`).join('');
+    }
   }
 }
 
@@ -2285,16 +2356,24 @@ function toggleTaskStatus(id) {
   const t = list.find(x=>x.id===id);
   if(!t) return;
   t.status = t.status==='done' ? 'todo' : 'done';
-  DB.set('tasks', list);
+  t.completedAt = t.status==='done' ? Date.now() : null;
+  localStorage.setItem('tasks', JSON.stringify(list));
   renderTasks();
   renderDashboard();
+  // Force immediate sync on status change
+  clearTimeout(syncTimeout);
+  syncToCloud();
 }
 
 function deleteTask(id) {
-  DB.set('tasks', DB.get('tasks').filter(t=>t.id!==id));
+  const updated = DB.get('tasks').filter(t => t.id !== id);
+  localStorage.setItem('tasks', JSON.stringify(updated)); // write directly
   toast('Task deleted');
   renderTasks();
   renderDashboard();
+  // Force immediate sync so deletion propagates instantly
+  clearTimeout(syncTimeout);
+  syncToCloud();
 }
 
 // ================================================================
@@ -2384,10 +2463,13 @@ function renderTests() {
 }
 
 function deleteTest(id) {
-  DB.set('tests', DB.get('tests').filter(t=>t.id!==id));
+  const updated = DB.get('tests').filter(t => t.id !== id);
+  localStorage.setItem('tests', JSON.stringify(updated));
   toast('Test deleted');
   renderTests();
   renderDashboard();
+  clearTimeout(syncTimeout);
+  syncToCloud();
 }
 
 // ================================================================
