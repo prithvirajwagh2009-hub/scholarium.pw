@@ -1984,6 +1984,8 @@ function initFirebase() {
         if(drawerSignin) drawerSignin.style.display = 'none';
         if(drawerSignout) drawerSignout.style.display = '';
         
+        // Flush any writes that happened before auth was ready
+        flushPendingSync();
         // Pull latest from cloud first, then set up live listeners
         syncFromCloud().then(() => {
           setupSyncListeners();
@@ -2161,22 +2163,48 @@ async function syncToCloud() {
   }
 }
 
-// ── Pull cloud data into localStorage + refresh UI ─────────────
+// ── Merge two arrays by id, local wins on conflict ────────────
+function mergeCollections(local, cloud) {
+  if (!local.length) return cloud;
+  if (!cloud.length) return local;
+  const merged = new Map();
+  // Cloud goes in first
+  cloud.forEach(item => { if(item.id) merged.set(item.id, item); });
+  // Local overwrites — local is always more up to date
+  local.forEach(item => { if(item.id) merged.set(item.id, item); });
+  return Array.from(merged.values());
+}
+
+// ── Pull cloud data, merge with local, refresh UI ──────────────
 async function syncFromCloud() {
   if (!syncEnabled || !currentUser) return;
   updateSyncStatus('syncing', 'Loading...');
 
   try {
     const userId = currentUser.uid;
+    let hadMerge = false;
+
     await Promise.all(COLLECTIONS.map(async col => {
       const doc = await db.collection('users').doc(userId).collection('data').doc(col).get();
       if (doc.exists) {
-        localStorage.setItem(col, JSON.stringify(doc.data().data || []));
+        const cloudData = doc.data().data || [];
+        const localData = DB.getRaw(col);
+        const merged = mergeCollections(localData, cloudData);
+        // Only write if something changed
+        if (JSON.stringify(merged) !== JSON.stringify(localData)) {
+          localStorage.setItem(col, JSON.stringify(merged));
+          hadMerge = true;
+        }
       }
     }));
 
     refreshAllViews();
     updateSyncStatus('synced', 'Up to date');
+
+    // If we merged in anything new, push the merged result back to cloud
+    if (hadMerge) {
+      setTimeout(syncToCloud, 500);
+    }
   } catch (err) {
     console.error('Download error:', err);
     updateSyncStatus('error', 'Load failed');
@@ -2223,13 +2251,28 @@ function refreshAllViews() {
 
 // ── Debounced auto-sync after any local write ───────────────────
 let syncTimer = null;
+let pendingLocalWrite = false; // wrote while auth not ready yet
+
 function scheduleSync() {
-  if (!syncEnabled || !currentUser) return;
+  if (!syncEnabled || !currentUser) {
+    // Not signed in yet — mark dirty so we sync once auth resolves
+    pendingLocalWrite = true;
+    return;
+  }
+  pendingLocalWrite = false;
   if (syncTimer) clearTimeout(syncTimer);
   syncTimer = setTimeout(() => {
     syncTimer = null;
     syncToCloud();
   }, 1500);
+}
+
+// Called by onAuthStateChanged once user is confirmed
+function flushPendingSync() {
+  if (pendingLocalWrite) {
+    pendingLocalWrite = false;
+    syncToCloud();
+  }
 }
 
 // ── Helper: write to localStorage and queue sync ───────────────
