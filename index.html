@@ -1739,7 +1739,8 @@ function initFirebase() {
         }
         
         setupSyncListeners();
-        syncToCloud();
+        // Pull from cloud first on login, then keep listeners running
+        syncFromCloud();
       } else {
         currentUser = null;
         syncEnabled = false;
@@ -1910,7 +1911,8 @@ async function syncFromCloud() {
       
       if (doc.exists) {
         const cloudData = doc.data().data || [];
-        DB.set(collection, cloudData);
+        // Write directly — don't trigger another sync
+        localStorage.setItem(collection, JSON.stringify(cloudData));
       }
     }
     
@@ -1991,11 +1993,10 @@ function debounceSync() {
   }, 3000);
 }
 
-// Initialize data structures
-if(!DB.get('tasks').length) DB.set('tasks', []);
-if(!DB.get('tests').length) DB.set('tests', []);
-if(!DB.get('journals').length) DB.set('journals', []);
-if(!DB.get('study-sessions').length) DB.set('study-sessions', []);
+// Initialize data structures (write directly, no sync trigger)
+['tasks','tests','journals','study-sessions','events'].forEach(key => {
+  if(localStorage.getItem(key) === null) localStorage.setItem(key, '[]');
+});
 
 function todayStr() {
   const d = new Date();
@@ -2127,9 +2128,11 @@ function saveDashJournal() {
   const entry = {date:ds, text, mood:dashMood, updated:Date.now()};
   if(idx>=0) list[idx]=entry; 
   else if(text||dashMood) list.push(entry);
-  DB.set('journals', list);
+  localStorage.setItem('journals', JSON.stringify(list));
   toast('Reflection saved');
   renderCalendar();
+  clearTimeout(syncTimeout);
+  if(syncEnabled && currentUser) syncToCloud();
 }
 
 function renderDashboard() {
@@ -2197,8 +2200,10 @@ function quickDone(id, checked) {
   const t = list.find(x=>x.id===id); 
   if(!t) return;
   t.status = checked ? 'done' : 'todo';
-  DB.set('tasks', list);
+  localStorage.setItem('tasks', JSON.stringify(list));
   renderDashboard();
+  clearTimeout(syncTimeout);
+  if(syncEnabled && currentUser) syncToCloud();
 }
 
 // ================================================================
@@ -2245,11 +2250,21 @@ function saveTask() {
   
   const list = DB.get('tasks');
   list.push(task);
-  DB.set('tasks', list);
+  localStorage.setItem('tasks', JSON.stringify(list));
   closeModal('add-task-modal');
   toast('Task added');
-  renderTasks();
+  // Switch to the matching filter so the new task is immediately visible
+  const today = todayStr();
+  const tomorrow = (() => { const d = new Date(); d.setDate(d.getDate()+1); return d.toISOString().split('T')[0]; })();
+  if(task.due === today) setTaskFilter('today');
+  else if(task.due === tomorrow) setTaskFilter('tomorrow');
+  else if(task.due && task.due > today) setTaskFilter('week');
+  else setTaskFilter('all');
   renderDashboard();
+  // Force immediate sync
+  clearTimeout(syncTimeout);
+  if(syncEnabled && currentUser) syncToCloud();
+  else debounceSync();
 }
 
 function renderTasks() {
@@ -2265,6 +2280,7 @@ function renderTasks() {
   if(filter === 'today') active = active.filter(t => t.due === today);
   else if(filter === 'tomorrow') active = active.filter(t => t.due === tomorrow);
   else if(filter === 'week') active = active.filter(t => t.due && t.due >= today && t.due <= weekEnd);
+  // 'all' shows everything including tasks with no due date
   else if(filter === 'overdue') active = active.filter(t => t.due && t.due < today);
   
   active = active.sort((a,b) => (a.due||'9999') > (b.due||'9999') ? 1 : -1);
@@ -2410,11 +2426,13 @@ function saveTest() {
   
   const list = DB.get('tests');
   list.push(test);
-  DB.set('tests', list);
+  localStorage.setItem('tests', JSON.stringify(list));
   closeModal('add-test-modal');
   toast('Test recorded');
   renderTests();
   renderDashboard();
+  clearTimeout(syncTimeout);
+  if(syncEnabled && currentUser) syncToCloud();
 }
 
 function renderTests() {
@@ -2833,9 +2851,11 @@ function saveSession() {
   
   const sessions = DB.get('study-sessions');
   sessions.push(session);
-  DB.set('study-sessions', sessions);
+  localStorage.setItem('study-sessions', JSON.stringify(sessions));
   renderAnalytics();
   renderDashboard();
+  clearTimeout(syncTimeout);
+  if(syncEnabled && currentUser) syncToCloud();
   
   sessionStartTime = new Date(); // Reset for next segment if continuing
 }
@@ -2991,9 +3011,6 @@ function updateVolume(value) {
 }
 
 // ================================================================
-//  INIT
-// ================================================================
-// ================================================================
 //  EVENTS & REMINDERS
 // ================================================================
 function openAddEventModal() {
@@ -3030,7 +3047,7 @@ function saveEvent() {
   
   const list = DB.get('events');
   list.push(ev);
-  DB.set('events', list);
+  localStorage.setItem('events', JSON.stringify(list));
   closeModal('add-event-modal');
   toast('Event saved!');
   
@@ -3038,13 +3055,19 @@ function saveEvent() {
   scheduleReminder(ev);
   renderCalendar();
   if(selectedDate === date) selectDate(date);
+  // Force immediate sync
+  clearTimeout(syncTimeout);
+  if(syncEnabled && currentUser) syncToCloud();
 }
 
 function deleteEvent(id) {
-  DB.set('events', DB.get('events').filter(e=>e.id!==id));
+  const updated = DB.get('events').filter(e => e.id !== id);
+  localStorage.setItem('events', JSON.stringify(updated));
   toast('Event deleted');
   renderCalendar();
   if(selectedDate) selectDate(selectedDate);
+  clearTimeout(syncTimeout);
+  if(syncEnabled && currentUser) syncToCloud();
 }
 
 // ================================================================
@@ -3109,7 +3132,7 @@ function rescheduleAllReminders() {
 // ================================================================
 //  INIT
 // ================================================================
-if(!DB.get('events').length) DB.set('events', []);
+// events already initialized above
 
 initFirebase(); // Initialize Firebase first
 setTimerMode('timer'); // Initialize timer mode
