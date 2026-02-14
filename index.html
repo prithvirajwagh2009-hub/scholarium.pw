@@ -606,6 +606,9 @@
     background:var(--teal);
     border-radius:50%;
   }
+  .cal-day.has-event {
+    box-shadow: inset 0 0 0 1.5px var(--purple);
+  }
 
   /* ── Study timer ── */
   .timer-display {
@@ -1377,7 +1380,7 @@
           </button>
         </div>
         <div class="cal-grid" id="cal-grid"></div>
-        <div style="display:flex;gap:16px;margin-top:12px;font-size:.75rem;color:var(--cream-faint);justify-content:center;">
+        <div style="display:flex;gap:16px;margin-top:12px;font-size:.75rem;color:var(--cream-faint);justify-content:center;flex-wrap:wrap;">
           <div style="display:flex;align-items:center;gap:6px;">
             <div style="width:6px;height:6px;background:var(--amber);border-radius:50%;"></div>
             <span>Reflection</span>
@@ -1386,14 +1389,73 @@
             <div style="width:6px;height:6px;background:var(--teal);border-radius:50%;"></div>
             <span>Study Session</span>
           </div>
+          <div style="display:flex;align-items:center;gap:6px;">
+            <div style="width:6px;height:6px;background:var(--purple);border-radius:50%;"></div>
+            <span>Event</span>
+          </div>
         </div>
       </div>
 
       <div class="card">
-        <div class="card-title" id="selected-date-label">Select a date</div>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;padding-bottom:12px;border-bottom:1px solid var(--border);">
+          <div class="card-title" id="selected-date-label" style="margin:0;padding:0;border:none;">Select a date</div>
+          <button class="btn btn-sm btn-primary" onclick="openAddEventModal()" id="add-event-btn" style="display:none;">+ Event</button>
+        </div>
         <div id="date-details">
           <div class="empty-state">Click a date to view details</div>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Add Event Modal -->
+  <div id="add-event-modal" class="modal-backdrop hidden" onclick="closeIfBackdrop(event,'add-event-modal')">
+    <div class="modal">
+      <div class="modal-header">
+        <h3>Add Event</h3>
+        <button class="modal-close" onclick="closeModal('add-event-modal')">×</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-row">
+          <div>
+            <label>Event Title</label>
+            <input type="text" id="event-title" placeholder="e.g. Math Exam">
+          </div>
+        </div>
+        <div class="form-row cols-2">
+          <div>
+            <label>Date</label>
+            <input type="date" id="event-date">
+          </div>
+          <div>
+            <label>Time</label>
+            <input type="time" id="event-time">
+          </div>
+        </div>
+        <div class="form-row">
+          <div>
+            <label>Reminder</label>
+            <select id="event-reminder">
+              <option value="0">At time of event</option>
+              <option value="5">5 minutes before</option>
+              <option value="10">10 minutes before</option>
+              <option value="15" selected>15 minutes before</option>
+              <option value="30">30 minutes before</option>
+              <option value="60">1 hour before</option>
+              <option value="1440">1 day before</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-row">
+          <div>
+            <label>Notes</label>
+            <textarea id="event-notes" placeholder="Optional notes..."></textarea>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn" onclick="closeModal('add-event-modal')">Cancel</button>
+        <button class="btn btn-primary" onclick="saveEvent()">Save Event</button>
       </div>
     </div>
   </div>
@@ -1777,33 +1839,51 @@ function updateSyncStatus(status, text) {
 //  CLOUD SYNC FUNCTIONS
 // ================================================================
 let syncInProgress = false;
+let pendingSync = false; // track if a change came in during a sync
 
 async function syncToCloud() {
-  if (!syncEnabled || !currentUser || syncInProgress) return;
+  if (!syncEnabled || !currentUser) return;
+  
+  // If already syncing, mark as pending and return — will re-run after
+  if (syncInProgress) {
+    pendingSync = true;
+    return;
+  }
   
   syncInProgress = true;
+  pendingSync = false;
   updateSyncStatus('syncing', 'Syncing...');
   
   try {
     const userId = currentUser.uid;
-    const collections = ['tasks', 'tests', 'journals', 'study-sessions'];
+    const collections = ['tasks', 'tests', 'journals', 'study-sessions', 'events'];
     
+    // Use a batch write so all collections sync atomically
+    const batch = db.batch();
     for (const collection of collections) {
-      const localData = DB.get(collection);
+      const localData = DB.getRaw(collection);
       const docRef = db.collection('users').doc(userId).collection('data').doc(collection);
-      
-      await docRef.set({
+      batch.set(docRef, {
         data: localData,
         lastModified: firebase.firestore.FieldValue.serverTimestamp()
       }, { merge: true });
     }
+    await batch.commit();
     
     updateSyncStatus('synced', 'Synced');
     syncInProgress = false;
+    
+    // If a change came in while we were syncing, sync again
+    if (pendingSync) {
+      pendingSync = false;
+      debounceSync();
+    }
   } catch (error) {
     console.error("Sync error:", error);
-    updateSyncStatus('error', 'Sync failed');
+    updateSyncStatus('error', 'Sync failed — retrying...');
     syncInProgress = false;
+    // Retry after 5 seconds on failure
+    setTimeout(() => syncToCloud(), 5000);
   }
 }
 
@@ -1814,7 +1894,7 @@ async function syncFromCloud() {
   
   try {
     const userId = currentUser.uid;
-    const collections = ['tasks', 'tests', 'journals', 'study-sessions'];
+    const collections = ['tasks', 'tests', 'journals', 'study-sessions', 'events'];
     
     for (const collection of collections) {
       const docRef = db.collection('users').doc(userId).collection('data').doc(collection);
@@ -1844,34 +1924,35 @@ function setupSyncListeners() {
   if (!syncEnabled || !currentUser) return;
   
   const userId = currentUser.uid;
-  const collections = ['tasks', 'tests', 'journals', 'study-sessions'];
+  const collections = ['tasks', 'tests', 'journals', 'study-sessions', 'events'];
   
   collections.forEach(collection => {
     db.collection('users').doc(userId).collection('data').doc(collection)
       .onSnapshot(doc => {
-        if (doc.exists && !syncInProgress) {
-          const cloudData = doc.data().data || [];
-          const localData = DB.get(collection);
-          
-          // Simple comparison - if different, update local
-          if (JSON.stringify(cloudData) !== JSON.stringify(localData)) {
-            DB.set(collection, cloudData);
-            
-            // Refresh views
-            if (collection === 'tasks') renderTasks();
-            if (collection === 'tests') renderTests();
-            if (collection === 'journals') renderCalendar();
-            if (collection === 'study-sessions') renderAnalytics();
-            renderDashboard();
-          }
-        }
+        // Don't overwrite local data if we're currently syncing to cloud
+        // or if there's a pending local change (debounce timer is running)
+        if (!doc.exists || syncInProgress || syncTimeout) return;
+        
+        const cloudData = doc.data().data || [];
+        const localData = DB.getRaw(collection);
+        
+        // Only update if cloud data is actually different
+        if (JSON.stringify(cloudData) === JSON.stringify(localData)) return;
+        
+        // Write directly to localStorage (bypass DB.set to avoid triggering another sync)
+        localStorage.setItem(collection, JSON.stringify(cloudData));
+        
+        // Refresh relevant views
+        if (collection === 'tasks') renderTasks();
+        if (collection === 'tests') renderTests();
+        if (collection === 'journals') renderCalendar();
+        if (collection === 'study-sessions') renderAnalytics();
+        if (collection === 'events') renderCalendar();
+        renderDashboard();
       });
   });
 }
 
-// ================================================================
-//  ENHANCED DATABASE WITH AUTO-SYNC
-// ================================================================
 // ================================================================
 //  DATABASE & UTILS
 // ================================================================
@@ -1880,22 +1961,26 @@ const DB = {
     try { return JSON.parse(localStorage.getItem(key)) || []; }
     catch { return []; }
   },
+  getRaw: (key) => {
+    // Same as get but used internally to avoid triggering sync
+    try { return JSON.parse(localStorage.getItem(key)) || []; }
+    catch { return []; }
+  },
   set: (key, val) => {
     localStorage.setItem(key, JSON.stringify(val));
-    // Auto-sync to cloud after local change
-    if (syncEnabled && !syncInProgress) {
-      debounceSync();
-    }
+    // Always queue a sync, even if one is in progress
+    debounceSync();
   }
 };
 
-// Debounce sync to avoid too many calls
+// Debounce sync — wait 3s after last change before syncing
 let syncTimeout;
 function debounceSync() {
+  if (!syncEnabled || !currentUser) return;
   clearTimeout(syncTimeout);
   syncTimeout = setTimeout(() => {
     syncToCloud();
-  }, 2000); // Sync 2 seconds after last change
+  }, 3000);
 }
 
 // Initialize data structures
@@ -1954,7 +2039,14 @@ function showPage(page) {
   if(page==='tasks') renderTasks();
   if(page==='tests') renderTests();
   if(page==='analytics') renderAnalytics();
-  if(page==='calendar') renderCalendar();
+  if(page==='calendar') {
+    // Sync from cloud first so calendar shows latest data
+    if(syncEnabled && currentUser) {
+      syncFromCloud().then(() => renderCalendar());
+    } else {
+      renderCalendar();
+    }
+  }
 }
 
 function closeModal(id) {
@@ -2199,7 +2291,6 @@ function toggleTaskStatus(id) {
 }
 
 function deleteTask(id) {
-  if(!confirm('Delete this task?')) return;
   DB.set('tasks', DB.get('tasks').filter(t=>t.id!==id));
   toast('Task deleted');
   renderTasks();
@@ -2293,7 +2384,6 @@ function renderTests() {
 }
 
 function deleteTest(id) {
-  if(!confirm('Delete this test record?')) return;
   DB.set('tests', DB.get('tests').filter(t=>t.id!==id));
   toast('Test deleted');
   renderTests();
@@ -2319,10 +2409,13 @@ function renderCalendar() {
   
   const journals = DB.get('journals');
   const sessions = DB.get('study-sessions');
+  const events = DB.get('events');
   const hasEntry = {};
   const hasStudy = {};
+  const hasEvent = {};
   journals.forEach(j => hasEntry[j.date] = true);
   sessions.forEach(s => hasStudy[s.date] = true);
+  events.forEach(e => hasEvent[e.date] = true);
   
   const names = ['Su','Mo','Tu','We','Th','Fr','Sa'];
   let html = names.map(n=>`<div class="cal-day-name">${n}</div>`).join('');
@@ -2336,6 +2429,7 @@ function renderCalendar() {
     if(ds===selectedDate) cls.push('selected');
     if(hasEntry[ds]) cls.push('has-entry');
     if(hasStudy[ds]) cls.push('has-study');
+    if(hasEvent[ds]) cls.push('has-event');
     html += `<div class="${cls.join(' ')}" onclick="selectDate('${ds}')">${d}</div>`;
   }
   
@@ -2361,13 +2455,37 @@ function selectDate(ds) {
   });
   document.getElementById('selected-date-label').textContent = label;
   
+  // Show add event button
+  const addBtn = document.getElementById('add-event-btn');
+  if(addBtn) { addBtn.style.display = 'inline-flex'; addBtn.dataset.date = ds; }
+  
   // Get data for this date
   const journal = DB.get('journals').find(j=>j.date===ds);
   const tasks = DB.get('tasks').filter(t=>t.due===ds);
   const tests = DB.get('tests').filter(t=>t.date===ds);
   const sessions = DB.get('study-sessions').filter(s=>s.date===ds);
+  const events = DB.get('events').filter(e=>e.date===ds).sort((a,b)=>a.time.localeCompare(b.time));
   
   let html = '';
+  
+  // Events
+  if(events.length) {
+    html += `<div class="reflection-card" style="border-left:3px solid var(--purple);">
+      <div class="reflection-date" style="color:var(--purple);">Events</div>`;
+    events.forEach(ev => {
+      const timeStr = ev.time ? new Date('2000-01-01T'+ev.time).toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'}) : '';
+      html += `<div style="margin:8px 0;padding:8px;background:var(--bg-base);border-radius:var(--radius);display:flex;justify-content:space-between;align-items:flex-start;">
+        <div>
+          <strong style="color:var(--cream);">${ev.title}</strong>
+          ${timeStr ? `<div style="color:var(--purple);font-family:var(--font-mono);font-size:.8rem;margin-top:2px;">${timeStr}</div>` : ''}
+          ${ev.notes ? `<div style="color:var(--cream-faint);font-size:.85rem;margin-top:4px;">${ev.notes}</div>` : ''}
+          <div style="color:var(--cream-faint);font-size:.75rem;margin-top:4px;">🔔 ${ev.reminderLabel}</div>
+        </div>
+        <button class="btn btn-sm btn-danger" onclick="deleteEvent('${ev.id}')" style="margin-left:8px;flex-shrink:0;">✕</button>
+      </div>`;
+    });
+    html += `</div>`;
+  }
   
   // Reflection
   if(journal) {
@@ -2539,31 +2657,35 @@ function startTimer() {
     document.getElementById('lap-btn-full').style.display = 'inline-flex';
   }
   
+  // Use real clock for background-aware timing
+  let timerStartWallClock = Date.now();
+  let timerStartMinutes = timerMinutes;
+  let timerStartSeconds = timerSeconds;
+
   timerInterval = setInterval(() => {
+    const elapsed = Math.floor((Date.now() - timerStartWallClock) / 1000);
+    
     if(timerMode === 'timer') {
-      // Countdown timer
-      if(timerSeconds === 0) {
-        if(timerMinutes === 0) {
-          pauseTimer();
-          saveSession();
-          toast('Session complete!');
-          return;
-        }
-        timerMinutes--;
-        timerSeconds = 59;
-      } else {
-        timerSeconds--;
+      const totalStartSecs = timerStartMinutes * 60 + timerStartSeconds;
+      const remaining = totalStartSecs - elapsed;
+      if(remaining <= 0) {
+        timerMinutes = 0; timerSeconds = 0;
+        updateTimerDisplay();
+        pauseTimer();
+        saveSession();
+        toast('Session complete! 🎉');
+        sendNotification('Session Complete', 'Your study session is done!');
+        return;
       }
+      timerMinutes = Math.floor(remaining / 60);
+      timerSeconds = remaining % 60;
     } else {
-      // Stopwatch (count up)
-      timerSeconds++;
-      if(timerSeconds === 60) {
-        timerSeconds = 0;
-        timerMinutes++;
-      }
+      const total = elapsed;
+      timerMinutes = Math.floor(total / 60);
+      timerSeconds = total % 60;
     }
     updateTimerDisplay();
-  }, 1000);
+  }, 500); // Poll every 500ms for accuracy
 }
 
 function pauseTimer() {
@@ -2789,9 +2911,135 @@ function updateVolume(value) {
 // ================================================================
 //  INIT
 // ================================================================
+// ================================================================
+//  EVENTS & REMINDERS
+// ================================================================
+function openAddEventModal() {
+  const btn = document.getElementById('add-event-btn');
+  const preDate = btn && btn.dataset.date ? btn.dataset.date : todayStr();
+  document.getElementById('event-title').value = '';
+  document.getElementById('event-date').value = preDate;
+  document.getElementById('event-time').value = '';
+  document.getElementById('event-notes').value = '';
+  document.getElementById('event-reminder').value = '15';
+  document.getElementById('add-event-modal').classList.remove('hidden');
+}
+
+function saveEvent() {
+  const title = document.getElementById('event-title').value.trim();
+  const date = document.getElementById('event-date').value;
+  const time = document.getElementById('event-time').value;
+  if(!title || !date) { toast('Please enter a title and date'); return; }
+  
+  const reminderMins = parseInt(document.getElementById('event-reminder').value);
+  const reminderLabels = {'0':'At event time','5':'5 min before','10':'10 min before',
+    '15':'15 min before','30':'30 min before','60':'1 hour before','1440':'1 day before'};
+  
+  const ev = {
+    id: generateId(),
+    title,
+    date,
+    time: time || '00:00',
+    notes: document.getElementById('event-notes').value.trim(),
+    reminderMins,
+    reminderLabel: reminderLabels[reminderMins] || (reminderMins + ' min before'),
+    created: Date.now()
+  };
+  
+  const list = DB.get('events');
+  list.push(ev);
+  DB.set('events', list);
+  closeModal('add-event-modal');
+  toast('Event saved!');
+  
+  // Request notification permission and schedule reminder
+  scheduleReminder(ev);
+  renderCalendar();
+  if(selectedDate === date) selectDate(date);
+}
+
+function deleteEvent(id) {
+  DB.set('events', DB.get('events').filter(e=>e.id!==id));
+  toast('Event deleted');
+  renderCalendar();
+  if(selectedDate) selectDate(selectedDate);
+}
+
+// ================================================================
+//  NOTIFICATIONS
+// ================================================================
+function sendNotification(title, body) {
+  if(Notification.permission === 'granted') {
+    new Notification(title, { body, icon: '' });
+  }
+}
+
+function scheduleReminder(ev) {
+  if(!ev.time || ev.time === '00:00') return;
+  
+  // Request permission first
+  if(Notification.permission === 'default') {
+    Notification.requestPermission().then(perm => {
+      if(perm === 'granted') scheduleReminderTimeout(ev);
+    });
+  } else if(Notification.permission === 'granted') {
+    scheduleReminderTimeout(ev);
+  }
+}
+
+function scheduleReminderTimeout(ev) {
+  const eventTime = new Date(ev.date + 'T' + ev.time);
+  const reminderTime = new Date(eventTime.getTime() - ev.reminderMins * 60 * 1000);
+  const msUntil = reminderTime.getTime() - Date.now();
+  
+  if(msUntil <= 0) return; // Already passed
+  if(msUntil > 7 * 24 * 60 * 60 * 1000) return; // More than 7 days away, skip (browser won't keep it)
+  
+  setTimeout(() => {
+    const label = ev.reminderMins === 0 ? 'is now!' : `in ${ev.reminderMins} min`;
+    sendNotification(`📅 ${ev.title}`, `Event ${label}`);
+  }, msUntil);
+}
+
+function requestNotificationPermission() {
+  if(!('Notification' in window)) {
+    toast('Notifications not supported in this browser');
+    return;
+  }
+  Notification.requestPermission().then(perm => {
+    if(perm === 'granted') toast('Notifications enabled!');
+    else toast('Notifications blocked. Enable in browser settings.');
+  });
+}
+
+// Re-schedule reminders for upcoming events on page load
+function rescheduleAllReminders() {
+  if(!('Notification' in window) || Notification.permission !== 'granted') return;
+  const events = DB.get('events');
+  const now = Date.now();
+  events.forEach(ev => {
+    if(!ev.time || ev.time === '00:00') return;
+    const eventTime = new Date(ev.date + 'T' + ev.time);
+    if(eventTime.getTime() > now) scheduleReminderTimeout(ev);
+  });
+}
+
+// ================================================================
+//  INIT
+// ================================================================
+if(!DB.get('events').length) DB.set('events', []);
+
 initFirebase(); // Initialize Firebase first
 setTimerMode('timer'); // Initialize timer mode
 renderDashboard();
+rescheduleAllReminders();
+
+// Ask for notification permission on first load (after a short delay)
+setTimeout(() => {
+  if('Notification' in window && Notification.permission === 'default') {
+    requestNotificationPermission();
+  }
+}, 3000);
 </script>
 </body>
 </html>
