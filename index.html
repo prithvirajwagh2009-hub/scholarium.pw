@@ -996,6 +996,282 @@
     .btn { padding: 8px 14px; font-size: .88rem; }
     .sidebar-brand h1 { font-size: 1.4rem; }
   }
+
+  /* ── Sync indicator — subtle icon only ── */
+  .sync-status {
+    position: fixed;
+    top: 16px;
+    right: 16px;
+    z-index: 1500;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    padding: 6px 12px;
+    border-radius: 20px;
+    font-size: .75rem;
+    color: var(--cream-faint);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity .3s;
+    font-family: var(--font-mono);
+  }
+  .sync-status.show { opacity: 1; }
+  .sync-status.syncing { border-color: var(--amber-dim); color: var(--amber); }
+  .sync-status.synced { border-color: var(--green); color: var(--green); }
+  .sync-status.error { border-color: var(--red); color: var(--red); opacity: 1; pointer-events: auto; }
+  .sync-dot { width:5px; height:5px; border-radius:50%; background:currentColor; }
+  .sync-dot.pulse { animation: pulse 1.2s ease-in-out infinite; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.2} }
+
+  /* ── Task filter tabs with counts ── */
+  .filter-strip {
+    display: flex;
+    gap: 6px;
+    overflow-x: auto;
+    padding-bottom: 4px;
+    scrollbar-width: none;
+  }
+  .filter-strip::-webkit-scrollbar { display: none; }
+  .filter-tab {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 7px 14px;
+    border-radius: 20px;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--cream-dim);
+    font-family: var(--font-body);
+    font-size: .88rem;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: all .2s;
+    flex-shrink: 0;
+  }
+  .filter-tab:hover { border-color: var(--border-lit); color: var(--cream); }
+  .filter-tab.active { background: var(--amber-faint); border-color: var(--amber-dim); color: var(--amber-glow); }
+  .filter-tab .tab-count {
+    background: var(--bg-raised);
+    color: var(--cream-faint);
+    font-family: var(--font-mono);
+    font-size: .72rem;
+    padding: 1px 6px;
+    border-radius: 10px;
+    min-width: 20px;
+    text-align: center;
+  }
+  .filter-tab.active .tab-count { background: var(--amber-dim); color: var(--bg-deep); }
+
+  /* ── Task date group header ── */
+  .task-group-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 16px 0 8px;
+  }
+  .task-group-header:first-child { margin-top: 0; }
+  .task-group-label {
+    font-size: .75rem;
+    font-family: var(--font-mono);
+    color: var(--amber);
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+  .task-group-line {
+    flex: 1;
+    height: 1px;
+    background: var(--border);
+  }
+  .task-group-count {
+    font-size: .72rem;
+    font-family: var(--font-mono);
+    color: var(--cream-faint);
+  }
+
+  /* ── Dashboard today agenda ── */
+  .agenda-strip {
+    margin-top: 20px;
+  }
+  .agenda-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .agenda-item:last-child { border-bottom: none; }
+  .agenda-time {
+    font-family: var(--font-mono);
+    font-size: .78rem;
+    color: var(--amber);
+    min-width: 48px;
+    padding-top: 2px;
+  }
+  .agenda-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    margin-top: 6px;
+    flex-shrink: 0;
+  }
+  .agenda-content { flex: 1; }
+  .agenda-title { color: var(--cream); font-size: .95rem; }
+  .agenda-sub { color: var(--cream-faint); font-size: .8rem; font-family: var(--font-mono); }
+
+  /* ── Upcoming events strip on calendar ── */
+  .events-agenda {
+    margin-top: 16px;
+    border-top: 1px solid var(--border);
+    padding-top: 14px;
+  }
+  .events-agenda-title {
+    font-family: var(--font-mono);
+    font-size: .72rem;
+    color: var(--purple);
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    margin-bottom: 10px;
+  }
+  .event-chip {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 12px;
+    background: var(--purple-faint);
+    border: 1px solid var(--purple);
+    border-radius: var(--radius);
+    margin-bottom: 6px;
+    cursor: pointer;
+    transition: all .2s;
+  }
+  .event-chip:hover { background: var(--bg-hover); }
+  .event-chip-date {
+    font-family: var(--font-mono);
+    font-size: .72rem;
+    color: var(--purple);
+    min-width: 56px;
+  }
+  .event-chip-title { color: var(--cream); font-size: .9rem; flex: 1; }
+  .event-chip-time { font-family: var(--font-mono); font-size: .72rem; color: var(--cream-faint); }
+
+  /* ── Mobile slide-up drawer ── */
+  #mobile-drawer {
+    position: fixed;
+    bottom: 60px;
+    left: 0;
+    right: 0;
+    background: var(--bg-card);
+    border: 1px solid var(--border-lit);
+    border-radius: 16px 16px 0 0;
+    z-index: 350;
+    padding: 0 0 8px;
+    transform: translateY(110%);
+    transition: transform .32s cubic-bezier(.4,0,.2,1);
+    display: none;
+    max-height: 75vh;
+    overflow-y: auto;
+  }
+  #mobile-drawer.open {
+    transform: translateY(0);
+  }
+  .drawer-handle {
+    width: 36px;
+    height: 4px;
+    background: var(--border-lit);
+    border-radius: 2px;
+    margin: 12px auto 8px;
+  }
+  .drawer-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 2px;
+    padding: 8px 12px 16px;
+  }
+  .drawer-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    padding: 14px 8px;
+    border-radius: 10px;
+    cursor: pointer;
+    color: var(--cream-dim);
+    font-size: .78rem;
+    font-family: var(--font-body);
+    transition: all .2s;
+    background: transparent;
+    border: 1px solid transparent;
+  }
+  .drawer-item:hover, .drawer-item:active { background: var(--bg-raised); border-color: var(--border); color: var(--cream); }
+  .drawer-item svg { width: 22px; height: 22px; }
+  .drawer-section-label {
+    font-family: var(--font-mono);
+    font-size: .68rem;
+    color: var(--cream-faint);
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    padding: 8px 20px 4px;
+  }
+
+  /* ── Sidebar sync icon ── */
+  .sidebar-sync-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 18px;
+    height: 18px;
+    margin-left: auto;
+    opacity: 0;
+    transition: opacity .3s;
+  }
+  .sidebar-sync-icon.active { opacity: 1; }
+  .sidebar-sync-icon.spinning svg { animation: spin .8s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ── Study streak badge ── */
+  .streak-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: var(--amber-faint);
+    border: 1px solid var(--amber-dim);
+    border-radius: 20px;
+    padding: 4px 12px;
+    font-family: var(--font-mono);
+    font-size: .78rem;
+    color: var(--amber-glow);
+    margin-top: 8px;
+  }
+
+  /* ── Calendar color-tinted days ── */
+  .cal-day.has-event { box-shadow: inset 0 0 0 1.5px var(--purple); }
+
+  /* ── Page header with sync dot ── */
+  .page-header-row {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    margin-bottom: 32px;
+  }
+  .page-header-row .page-header { margin-bottom: 0; }
+  .header-sync {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-family: var(--font-mono);
+    font-size: .72rem;
+    color: var(--cream-faint);
+    opacity: 0;
+    transition: opacity .3s;
+    padding-top: 6px;
+  }
+  .header-sync.show { opacity: 1; }
+  .header-sync.syncing { color: var(--amber); }
+  .header-sync.synced { color: var(--green); }
+  .header-sync.error { color: var(--red); opacity: 1; }
 </style>
 </head>
 <body>
@@ -1095,90 +1371,63 @@
 <div id="mobile-nav">
   <div class="mobile-nav-grid">
     <div class="mobile-nav-item active" onclick="showPage('dashboard')">
-      <svg class="icon-outline" viewBox="0 0 24 24">
-        <rect x="3" y="3" width="7" height="7" rx="1"></rect>
-        <rect x="14" y="3" width="7" height="7" rx="1"></rect>
-        <rect x="14" y="14" width="7" height="7" rx="1"></rect>
-        <rect x="3" y="14" width="7" height="7" rx="1"></rect>
-      </svg>
+      <svg class="icon-outline" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"></rect><rect x="14" y="3" width="7" height="7" rx="1"></rect><rect x="14" y="14" width="7" height="7" rx="1"></rect><rect x="3" y="14" width="7" height="7" rx="1"></rect></svg>
       <span>Home</span>
     </div>
     <div class="mobile-nav-item" onclick="showPage('tasks')">
-      <svg class="icon-outline" viewBox="0 0 24 24">
-        <path d="M9 11l3 3L22 4"></path>
-        <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path>
-      </svg>
+      <svg class="icon-outline" viewBox="0 0 24 24"><path d="M9 11l3 3L22 4"></path><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path></svg>
       <span>Tasks</span>
     </div>
     <div class="mobile-nav-item" onclick="showPage('timer')">
-      <svg class="icon-outline" viewBox="0 0 24 24">
-        <circle cx="12" cy="12" r="10"></circle>
-        <polyline points="12 6 12 12 16 14"></polyline>
-      </svg>
+      <svg class="icon-outline" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
       <span>Timer</span>
     </div>
-    <div class="mobile-nav-item" onclick="showPage('analytics')">
-      <svg class="icon-outline" viewBox="0 0 24 24">
-        <line x1="18" y1="20" x2="18" y2="10"></line>
-        <line x1="12" y1="20" x2="12" y2="4"></line>
-        <line x1="6" y1="20" x2="6" y2="14"></line>
-      </svg>
-      <span>Stats</span>
+    <div class="mobile-nav-item" onclick="showPage('calendar')">
+      <svg class="icon-outline" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
+      <span>Calendar</span>
     </div>
-    <div class="mobile-nav-item" onclick="toggleMobileMenu()">
-      <svg class="icon-outline" viewBox="0 0 24 24">
-        <line x1="3" y1="12" x2="21" y2="12"></line>
-        <line x1="3" y1="6" x2="21" y2="6"></line>
-        <line x1="3" y1="18" x2="21" y2="18"></line>
-      </svg>
+    <div class="mobile-nav-item" onclick="toggleDrawer()">
+      <svg class="icon-outline" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.5" fill="currentColor" stroke="none"></circle><circle cx="12" cy="12" r="1.5" fill="currentColor" stroke="none"></circle><circle cx="19" cy="12" r="1.5" fill="currentColor" stroke="none"></circle></svg>
       <span>More</span>
     </div>
   </div>
 </div>
 
-<!-- Mobile More Menu -->
-<div id="mobile-more-menu" style="display:none; position:fixed; bottom:65px; left:0; right:0; background:var(--bg-base); border-top:1px solid var(--border); z-index:199; padding:8px 0;">
-  <div style="display:grid; grid-template-columns:1fr 1fr; gap:4px; padding:8px 12px;">
-    <div class="mobile-nav-item" onclick="showPage('calendar'); toggleMobileMenu();" style="flex-direction:row; gap:10px; padding:12px 16px; justify-content:flex-start;">
-      <svg class="icon-outline" viewBox="0 0 24 24" style="width:20px;height:20px;margin:0;">
-        <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
-        <line x1="16" y1="2" x2="16" y2="6"></line>
-        <line x1="8" y1="2" x2="8" y2="6"></line>
-        <line x1="3" y1="10" x2="21" y2="10"></line>
-      </svg>
-      <span>Calendar</span>
+<!-- Mobile Slide-up Drawer -->
+<div id="mobile-drawer">
+  <div class="drawer-handle"></div>
+  <div class="drawer-section-label">Pages</div>
+  <div class="drawer-grid">
+    <div class="drawer-item" onclick="showPage('analytics'); closeDrawer();">
+      <svg class="icon-outline" viewBox="0 0 24 24"><line x1="18" y1="20" x2="18" y2="10"></line><line x1="12" y1="20" x2="12" y2="4"></line><line x1="6" y1="20" x2="6" y2="14"></line></svg>
+      <span>Analytics</span>
     </div>
-    <div class="mobile-nav-item" onclick="showPage('tests'); toggleMobileMenu();" style="flex-direction:row; gap:10px; padding:12px 16px; justify-content:flex-start;">
-      <svg class="icon-outline" viewBox="0 0 24 24" style="width:20px;height:20px;margin:0;">
-        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-        <path d="M14 2v6h6M16 13H8M16 17H8M10 9H8"></path>
-      </svg>
+    <div class="drawer-item" onclick="showPage('tests'); closeDrawer();">
+      <svg class="icon-outline" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><path d="M14 2v6h6M16 13H8M16 17H8M10 9H8"></path></svg>
       <span>Test Log</span>
     </div>
-    <div class="mobile-nav-item" onclick="toggleTheme(); toggleMobileMenu();" style="flex-direction:row; gap:10px; padding:12px 16px; justify-content:flex-start;">
-      <svg class="icon-outline" viewBox="0 0 24 24" style="width:20px;height:20px;margin:0;">
-        <circle cx="12" cy="12" r="5"></circle>
-        <line x1="12" y1="1" x2="12" y2="3"></line>
-        <line x1="12" y1="21" x2="12" y2="23"></line>
-        <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
-        <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
-        <line x1="1" y1="12" x2="3" y2="12"></line>
-        <line x1="21" y1="12" x2="23" y2="12"></line>
-        <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
-        <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
-      </svg>
-      <span>Theme</span>
+    <div class="drawer-item" onclick="syncFromCloud(); closeDrawer();">
+      <svg class="icon-outline" viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"></polyline><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path></svg>
+      <span>Sync Now</span>
     </div>
-    <div class="mobile-nav-item" id="mobile-signin-btn" onclick="signInWithGoogle(); toggleMobileMenu();" style="flex-direction:row; gap:10px; padding:12px 16px; justify-content:flex-start;">
-      <svg class="icon-outline" viewBox="0 0 24 24" style="width:20px;height:20px;margin:0;">
-        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
-        <circle cx="12" cy="7" r="4"></circle>
-      </svg>
-      <span>Sign In</span>
+  </div>
+  <div class="drawer-section-label">Settings</div>
+  <div class="drawer-grid" style="padding-bottom:20px;">
+    <div class="drawer-item" onclick="toggleTheme(); closeDrawer();">
+      <svg class="icon-outline" viewBox="0 0 24 24"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>
+      <span id="drawer-theme-label">Theme</span>
+    </div>
+    <div class="drawer-item" id="drawer-signin-btn" onclick="signInWithGoogle(); closeDrawer();">
+      <svg class="icon-outline" viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+      <span id="drawer-auth-label">Sign In</span>
+    </div>
+    <div class="drawer-item" onclick="signOut(); closeDrawer();" id="drawer-signout-btn" style="display:none;">
+      <svg class="icon-outline" viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
+      <span>Sign Out</span>
     </div>
   </div>
 </div>
-<div id="mobile-menu-backdrop" onclick="toggleMobileMenu()" style="display:none; position:fixed; inset:0; z-index:198;"></div>
+<div id="mobile-drawer-backdrop" onclick="closeDrawer()" style="display:none; position:fixed; inset:0; z-index:340; background:rgba(0,0,0,.45);"></div>
 
 <!-- Main Content -->
 <div id="main">
@@ -1230,6 +1479,17 @@
       </div>
     </div>
 
+    <!-- Today's Agenda -->
+    <div class="card" style="margin-bottom:20px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+        <div class="card-title" style="margin:0;padding:0;border:none;">Today's Agenda</div>
+        <div id="streak-badge-wrap"></div>
+      </div>
+      <div id="dash-agenda" style="margin-top:12px;">
+        <div class="empty-state" style="padding:20px;">Nothing scheduled today</div>
+      </div>
+    </div>
+
     <div class="grid-2">
       <div class="card">
         <div class="card-title">Today's Reflection</div>
@@ -1253,24 +1513,6 @@
         </div>
       </div>
     </div>
-
-    <!-- Mobile theme toggle -->
-    <div style="margin-top:20px;display:none;" id="mobile-theme-toggle">
-      <button class="btn btn-ghost" onclick="toggleTheme()" style="width:100%;">
-        <svg class="icon-outline" viewBox="0 0 24 24" style="width:16px;height:16px;">
-          <circle cx="12" cy="12" r="5"></circle>
-          <line x1="12" y1="1" x2="12" y2="3"></line>
-          <line x1="12" y1="21" x2="12" y2="23"></line>
-          <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
-          <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
-          <line x1="1" y1="12" x2="3" y2="12"></line>
-          <line x1="21" y1="12" x2="23" y2="12"></line>
-          <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
-          <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
-        </svg>
-        <span id="theme-label-mobile">Switch to Oxblood Theme</span>
-      </button>
-    </div>
   </div>
 
   <!-- Task Manager Page -->
@@ -1281,21 +1523,18 @@
       <p>Keep track of all your assignments and deadlines</p>
     </div>
     
-    <div style="display:flex;gap:10px;margin-bottom:20px;flex-wrap:wrap;align-items:center;">
-      <button class="btn btn-primary" onclick="openAddTaskModal()">
-        <svg class="icon-outline" viewBox="0 0 24 24" style="width:16px;height:16px;">
-          <line x1="12" y1="5" x2="12" y2="19"></line>
-          <line x1="5" y1="12" x2="19" y2="12"></line>
-        </svg>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:10px;">
+      <div class="filter-strip" id="task-filter-strip">
+        <button class="filter-tab active" onclick="setTaskFilter('all')" data-filter="all">All <span class="tab-count" id="fc-all">0</span></button>
+        <button class="filter-tab" onclick="setTaskFilter('today')" data-filter="today">Today <span class="tab-count" id="fc-today">0</span></button>
+        <button class="filter-tab" onclick="setTaskFilter('tomorrow')" data-filter="tomorrow">Tomorrow <span class="tab-count" id="fc-tomorrow">0</span></button>
+        <button class="filter-tab" onclick="setTaskFilter('week')" data-filter="week">This Week <span class="tab-count" id="fc-week">0</span></button>
+        <button class="filter-tab" onclick="setTaskFilter('overdue')" data-filter="overdue">Overdue <span class="tab-count" id="fc-overdue" style="background:var(--red-faint);color:var(--red);">0</span></button>
+      </div>
+      <button class="btn btn-primary btn-sm" onclick="openAddTaskModal()" style="flex-shrink:0;">
+        <svg class="icon-outline" viewBox="0 0 24 24" style="width:14px;height:14px;"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
         Add Task
       </button>
-      <div style="display:flex;gap:6px;flex-wrap:wrap;">
-        <button class="btn btn-sm task-filter-btn active" onclick="setTaskFilter('all')" data-filter="all">All</button>
-        <button class="btn btn-sm task-filter-btn" onclick="setTaskFilter('today')" data-filter="today">Today</button>
-        <button class="btn btn-sm task-filter-btn" onclick="setTaskFilter('tomorrow')" data-filter="tomorrow">Tomorrow</button>
-        <button class="btn btn-sm task-filter-btn" onclick="setTaskFilter('week')" data-filter="week">This Week</button>
-        <button class="btn btn-sm task-filter-btn" onclick="setTaskFilter('overdue')" data-filter="overdue">Overdue</button>
-      </div>
     </div>
 
     <div class="card">
@@ -1389,19 +1628,12 @@
         </div>
         <div class="cal-grid" id="cal-grid"></div>
         <div style="display:flex;gap:16px;margin-top:12px;font-size:.75rem;color:var(--cream-faint);justify-content:center;flex-wrap:wrap;">
-          <div style="display:flex;align-items:center;gap:6px;">
-            <div style="width:6px;height:6px;background:var(--amber);border-radius:50%;"></div>
-            <span>Reflection</span>
-          </div>
-          <div style="display:flex;align-items:center;gap:6px;">
-            <div style="width:6px;height:6px;background:var(--teal);border-radius:50%;"></div>
-            <span>Study Session</span>
-          </div>
-          <div style="display:flex;align-items:center;gap:6px;">
-            <div style="width:6px;height:6px;background:var(--purple);border-radius:50%;"></div>
-            <span>Event</span>
-          </div>
+          <div style="display:flex;align-items:center;gap:6px;"><div style="width:6px;height:6px;background:var(--amber);border-radius:50%;"></div><span>Reflection</span></div>
+          <div style="display:flex;align-items:center;gap:6px;"><div style="width:6px;height:6px;background:var(--teal);border-radius:50%;"></div><span>Study</span></div>
+          <div style="display:flex;align-items:center;gap:6px;"><div style="width:6px;height:6px;background:var(--purple);border-radius:50%;"></div><span>Event</span></div>
         </div>
+        <!-- Upcoming events strip -->
+        <div class="events-agenda" id="upcoming-events-strip"></div>
       </div>
 
       <div class="card">
@@ -1579,13 +1811,22 @@
           <input type="text" id="task-title" placeholder="e.g., Complete essay">
         </div>
       </div>
-      <div class="form-row cols-2">
+      <div class="form-row">
         <div>
           <label>Subject</label>
           <input type="text" id="task-subject" placeholder="e.g., English Literature">
         </div>
+      </div>
+      <div class="form-row">
         <div>
           <label>Due Date</label>
+          <div style="display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap;">
+            <button type="button" class="btn btn-sm btn-ghost" onclick="setTaskDue(0)" style="font-size:.78rem;">Today</button>
+            <button type="button" class="btn btn-sm btn-ghost" onclick="setTaskDue(1)" style="font-size:.78rem;">Tomorrow</button>
+            <button type="button" class="btn btn-sm btn-ghost" onclick="setTaskDue(3)" style="font-size:.78rem;">In 3 days</button>
+            <button type="button" class="btn btn-sm btn-ghost" onclick="setTaskDue(7)" style="font-size:.78rem;">Next week</button>
+            <button type="button" class="btn btn-sm btn-ghost" onclick="setTaskDue(null)" style="font-size:.78rem;">No date</button>
+          </div>
           <input type="date" id="task-due">
         </div>
       </div>
@@ -1737,10 +1978,16 @@ function initFirebase() {
           userName.textContent = user.displayName || user.email;
           userSection.classList.remove('hidden');
         }
+        // Update drawer auth state
+        const drawerSignin = document.getElementById('drawer-signin-btn');
+        const drawerSignout = document.getElementById('drawer-signout-btn');
+        if(drawerSignin) drawerSignin.style.display = 'none';
+        if(drawerSignout) drawerSignout.style.display = '';
         
-        setupSyncListeners();
-        // Pull from cloud first on login, then keep listeners running
-        syncFromCloud();
+        // Pull latest from cloud first, then set up live listeners
+        syncFromCloud().then(() => {
+          setupSyncListeners();
+        });
       } else {
         currentUser = null;
         syncEnabled = false;
@@ -1775,13 +2022,25 @@ function continueOffline() {
   }, 3000);
 }
 
-function toggleMobileMenu() {
-  const menu = document.getElementById('mobile-more-menu');
-  const backdrop = document.getElementById('mobile-menu-backdrop');
-  const isOpen = menu.style.display === 'block';
-  menu.style.display = isOpen ? 'none' : 'block';
+function toggleDrawer() {
+  const drawer = document.getElementById('mobile-drawer');
+  const backdrop = document.getElementById('mobile-drawer-backdrop');
+  const isOpen = drawer.classList.contains('open');
+  drawer.style.display = isOpen ? 'none' : 'block';
   backdrop.style.display = isOpen ? 'none' : 'block';
+  // tiny delay so display:block is applied before transition
+  if(!isOpen) { requestAnimationFrame(() => { drawer.classList.add('open'); }); }
+  else { drawer.classList.remove('open'); }
 }
+function closeDrawer() {
+  const drawer = document.getElementById('mobile-drawer');
+  const backdrop = document.getElementById('mobile-drawer-backdrop');
+  drawer.classList.remove('open');
+  backdrop.style.display = 'none';
+  setTimeout(() => { drawer.style.display = 'none'; }, 300);
+}
+// Keep old name as alias in case anything still calls it
+function toggleMobileMenu() { toggleDrawer(); }
 
 async function signInWithGoogle() {
   if (!auth) {
@@ -1816,31 +2075,43 @@ async function signOut() {
   }
 }
 
+let _syncHideTimer = null;
 function updateSyncStatus(status, text) {
   const statusEl = document.getElementById('sync-status');
+  if(!statusEl) return;
   const textEl = document.getElementById('sync-text');
   const dotEl = statusEl.querySelector('.sync-dot');
-  
-  statusEl.classList.remove('syncing', 'synced', 'error');
-  dotEl.classList.remove('pulse');
-  
-  if (status === 'syncing') {
-    statusEl.classList.add('syncing');
-    dotEl.classList.add('pulse');
-  } else if (status === 'synced') {
-    statusEl.classList.add('synced');
-  } else if (status === 'error') {
-    statusEl.classList.add('error');
+
+  statusEl.classList.remove('syncing', 'synced', 'error', 'offline');
+  if(dotEl) dotEl.classList.remove('pulse');
+  clearTimeout(_syncHideTimer);
+
+  if(status === 'syncing') {
+    statusEl.classList.add('syncing', 'show');
+    if(dotEl) dotEl.classList.add('pulse');
+  } else if(status === 'synced') {
+    statusEl.classList.add('synced', 'show');
+    _syncHideTimer = setTimeout(() => statusEl.classList.remove('show'), 1800);
+  } else if(status === 'error') {
+    statusEl.classList.add('error', 'show');
+  } else {
+    // offline or other — just hide after delay
+    _syncHideTimer = setTimeout(() => statusEl.classList.remove('show'), 3000);
   }
-  
-  textEl.textContent = text;
-  statusEl.classList.add('show');
-  
-  // Auto-hide success messages
-  if (status === 'synced') {
-    setTimeout(() => {
-      statusEl.classList.remove('show');
-    }, 2000);
+
+  if(textEl) textEl.textContent = text;
+
+  // Update drawer auth buttons based on sign-in state
+  const drawerSignin = document.getElementById('drawer-signin-btn');
+  const drawerSignout = document.getElementById('drawer-signout-btn');
+  if(drawerSignin && drawerSignout) {
+    if(currentUser) {
+      drawerSignin.style.display = 'none';
+      drawerSignout.style.display = '';
+    } else {
+      drawerSignin.style.display = '';
+      drawerSignout.style.display = 'none';
+    }
   }
 }
 
@@ -1848,119 +2119,123 @@ function updateSyncStatus(status, text) {
 //  CLOUD SYNC FUNCTIONS
 // ================================================================
 let syncInProgress = false;
-let pendingSync = false; // track if a change came in during a sync
+let hasPendingWrite = false; // a local change happened while sync was running
+const COLLECTIONS = ['tasks', 'tests', 'journals', 'study-sessions', 'events'];
 
+// ── Write local data to Firestore ──────────────────────────────
 async function syncToCloud() {
   if (!syncEnabled || !currentUser) return;
-  
-  // If already syncing, mark as pending and return — will re-run after
+
   if (syncInProgress) {
-    pendingSync = true;
+    hasPendingWrite = true;
     return;
   }
-  
+
   syncInProgress = true;
-  pendingSync = false;
+  hasPendingWrite = false;
   updateSyncStatus('syncing', 'Syncing...');
-  
+
   try {
     const userId = currentUser.uid;
-    const collections = ['tasks', 'tests', 'journals', 'study-sessions', 'events'];
-    
-    // Use a batch write so all collections sync atomically
     const batch = db.batch();
-    for (const collection of collections) {
-      const localData = DB.getRaw(collection);
-      const docRef = db.collection('users').doc(userId).collection('data').doc(collection);
-      batch.set(docRef, {
-        data: localData,
-        lastModified: firebase.firestore.FieldValue.serverTimestamp()
-      }, { merge: true });
-    }
+
+    COLLECTIONS.forEach(col => {
+      const data = DB.getRaw(col);
+      const ref = db.collection('users').doc(userId).collection('data').doc(col);
+      batch.set(ref, { data, lastModified: firebase.firestore.FieldValue.serverTimestamp() });
+    });
+
     await batch.commit();
-    
+    syncInProgress = false;
     updateSyncStatus('synced', 'Synced');
-    syncInProgress = false;
-    
-    // If a change came in while we were syncing, sync again
-    if (pendingSync) {
-      pendingSync = false;
-      debounceSync();
+
+    if (hasPendingWrite) {
+      hasPendingWrite = false;
+      setTimeout(syncToCloud, 500);
     }
-  } catch (error) {
-    console.error("Sync error:", error);
-    updateSyncStatus('error', 'Sync failed — retrying...');
+  } catch (err) {
+    console.error('Sync error:', err);
     syncInProgress = false;
-    // Retry after 5 seconds on failure
-    setTimeout(() => syncToCloud(), 5000);
+    updateSyncStatus('error', 'Sync failed');
+    setTimeout(syncToCloud, 6000); // retry
   }
 }
 
+// ── Pull cloud data into localStorage + refresh UI ─────────────
 async function syncFromCloud() {
   if (!syncEnabled || !currentUser) return;
-  
-  updateSyncStatus('syncing', 'Downloading...');
-  
+  updateSyncStatus('syncing', 'Loading...');
+
   try {
     const userId = currentUser.uid;
-    const collections = ['tasks', 'tests', 'journals', 'study-sessions', 'events'];
-    
-    for (const collection of collections) {
-      const docRef = db.collection('users').doc(userId).collection('data').doc(collection);
-      const doc = await docRef.get();
-      
+    await Promise.all(COLLECTIONS.map(async col => {
+      const doc = await db.collection('users').doc(userId).collection('data').doc(col).get();
       if (doc.exists) {
-        const cloudData = doc.data().data || [];
-        // Write directly — don't trigger another sync
-        localStorage.setItem(collection, JSON.stringify(cloudData));
+        localStorage.setItem(col, JSON.stringify(doc.data().data || []));
       }
-    }
-    
-    // Refresh all views
-    renderDashboard();
-    renderTasks();
-    renderTests();
-    renderAnalytics();
-    renderCalendar();
-    
-    updateSyncStatus('synced', 'Downloaded');
-  } catch (error) {
-    console.error("Download error:", error);
-    updateSyncStatus('error', 'Download failed');
+    }));
+
+    refreshAllViews();
+    updateSyncStatus('synced', 'Up to date');
+  } catch (err) {
+    console.error('Download error:', err);
+    updateSyncStatus('error', 'Load failed');
   }
 }
 
+// ── Real-time listeners (other devices → this device) ──────────
+let listenerUnsubs = [];
 function setupSyncListeners() {
   if (!syncEnabled || !currentUser) return;
-  
+
+  // Unsubscribe any old listeners first
+  listenerUnsubs.forEach(fn => fn());
+  listenerUnsubs = [];
+
   const userId = currentUser.uid;
-  const collections = ['tasks', 'tests', 'journals', 'study-sessions', 'events'];
-  
-  collections.forEach(collection => {
-    db.collection('users').doc(userId).collection('data').doc(collection)
+
+  COLLECTIONS.forEach(col => {
+    let isFirst = true; // skip the immediate local echo on first snapshot
+    const unsub = db.collection('users').doc(userId).collection('data').doc(col)
       .onSnapshot(doc => {
-        // Don't overwrite local data if we're currently syncing to cloud
-        // or if there's a pending local change (debounce timer is running)
-        if (!doc.exists || syncInProgress || syncTimeout) return;
-        
+        if (isFirst) { isFirst = false; return; } // ignore initial snapshot
+        if (!doc.exists || syncInProgress) return;
+
         const cloudData = doc.data().data || [];
-        const localData = DB.getRaw(collection);
-        
-        // Only update if cloud data is actually different
+        const localData = DB.getRaw(col);
         if (JSON.stringify(cloudData) === JSON.stringify(localData)) return;
-        
-        // Write directly to localStorage (bypass DB.set to avoid triggering another sync)
-        localStorage.setItem(collection, JSON.stringify(cloudData));
-        
-        // Refresh relevant views
-        if (collection === 'tasks') renderTasks();
-        if (collection === 'tests') renderTests();
-        if (collection === 'journals') renderCalendar();
-        if (collection === 'study-sessions') renderAnalytics();
-        if (collection === 'events') renderCalendar();
-        renderDashboard();
+
+        localStorage.setItem(col, JSON.stringify(cloudData));
+        refreshAllViews();
       });
+    listenerUnsubs.push(unsub);
   });
+}
+
+// ── Refresh all UI views ────────────────────────────────────────
+function refreshAllViews() {
+  renderDashboard();
+  renderTasks();
+  renderTests();
+  renderAnalytics();
+  renderCalendar();
+}
+
+// ── Debounced auto-sync after any local write ───────────────────
+let syncTimer = null;
+function scheduleSync() {
+  if (!syncEnabled || !currentUser) return;
+  if (syncTimer) clearTimeout(syncTimer);
+  syncTimer = setTimeout(() => {
+    syncTimer = null;
+    syncToCloud();
+  }, 1500);
+}
+
+// ── Helper: write to localStorage and queue sync ───────────────
+function localWrite(key, data) {
+  localStorage.setItem(key, JSON.stringify(data));
+  scheduleSync();
 }
 
 // ================================================================
@@ -1972,26 +2247,13 @@ const DB = {
     catch { return []; }
   },
   getRaw: (key) => {
-    // Same as get but used internally to avoid triggering sync
     try { return JSON.parse(localStorage.getItem(key)) || []; }
     catch { return []; }
   },
   set: (key, val) => {
-    localStorage.setItem(key, JSON.stringify(val));
-    // Always queue a sync, even if one is in progress
-    debounceSync();
+    localWrite(key, val);
   }
 };
-
-// Debounce sync — wait 3s after last change before syncing
-let syncTimeout;
-function debounceSync() {
-  if (!syncEnabled || !currentUser) return;
-  clearTimeout(syncTimeout);
-  syncTimeout = setTimeout(() => {
-    syncToCloud();
-  }, 3000);
-}
 
 // Initialize data structures (write directly, no sync trigger)
 ['tasks','tests','journals','study-sessions','events'].forEach(key => {
@@ -2128,41 +2390,92 @@ function saveDashJournal() {
   const entry = {date:ds, text, mood:dashMood, updated:Date.now()};
   if(idx>=0) list[idx]=entry; 
   else if(text||dashMood) list.push(entry);
-  localStorage.setItem('journals', JSON.stringify(list));
+  localWrite('journals', list);
   toast('Reflection saved');
   renderCalendar();
-  clearTimeout(syncTimeout);
-  if(syncEnabled && currentUser) syncToCloud();
+}
+
+function calcStreak() {
+  const sessions = DB.get('study-sessions');
+  const sessionDates = new Set(sessions.map(s => s.date));
+  let streak = 0;
+  const d = new Date();
+  // Check today first; if no session today start from yesterday
+  if(!sessionDates.has(todayStr())) d.setDate(d.getDate()-1);
+  while(true) {
+    const ds = d.toISOString().split('T')[0];
+    if(!sessionDates.has(ds)) break;
+    streak++;
+    d.setDate(d.getDate()-1);
+  }
+  return streak;
 }
 
 function renderDashboard() {
-  // Greeting
   const h = new Date().getHours();
   const g = h<12 ? 'Good Morning' : h<17 ? 'Good Afternoon' : 'Good Evening';
   document.getElementById('dash-greeting').textContent = g;
   document.getElementById('dash-date-full').textContent =
     new Date().toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric',year:'numeric'});
 
+  const allTasks = DB.get('tasks');
+  const today = todayStr();
+
   // Stats
-  const tasks = DB.get('tasks').filter(t=>t.status!=='done');
-  const dueSoon = tasks.filter(t=> {
-    if(!t.due) return false;
-    const d = daysFromNow(t.due);
-    return d>=0 && d<=3;
-  });
+  const active = allTasks.filter(t=>t.status!=='done');
+  const dueSoon = active.filter(t=>{ if(!t.due) return false; const d=daysFromNow(t.due); return d>=0&&d<=3; });
   document.getElementById('s-tasks-due').textContent = dueSoon.length;
-
-  const done = DB.get('tasks').filter(t=>t.status==='done').length;
-  document.getElementById('s-done').textContent = done;
-
-  const weekAgo = new Date(); 
-  weekAgo.setDate(weekAgo.getDate()-7);
+  document.getElementById('s-done').textContent = allTasks.filter(t=>t.status==='done').length;
+  const weekAgo = new Date(); weekAgo.setDate(weekAgo.getDate()-7);
   const sessions = DB.get('study-sessions').filter(s=>new Date(s.date)>=weekAgo);
   const weekMins = sessions.reduce((a,s)=>a+s.duration,0);
-  document.getElementById('s-study').textContent = weekMins>=60 ? Math.floor(weekMins/60)+'h' : weekMins+'m';
+  document.getElementById('s-study').textContent = weekMins>=60?Math.floor(weekMins/60)+'h':weekMins+'m';
 
-  // Upcoming tasks
-  const upcoming = tasks.sort((a,b)=>(a.due||'9999')>(b.due||'9999')?1:-1).slice(0,5);
+  // Streak badge
+  const streak = calcStreak();
+  const streakWrap = document.getElementById('streak-badge-wrap');
+  if(streakWrap) {
+    streakWrap.innerHTML = streak > 0
+      ? `<span class="streak-badge">🔥 ${streak} day${streak>1?'s':''} streak</span>`
+      : '';
+  }
+
+  // Today's agenda — tasks due today + events today, sorted by time
+  const todayTasks = active.filter(t=>t.due===today);
+  const todayEvents = DB.get('events').filter(e=>e.date===today).sort((a,b)=>a.time.localeCompare(b.time));
+  const agendaEl = document.getElementById('dash-agenda');
+  if(agendaEl) {
+    let items = [];
+    todayEvents.forEach(ev => {
+      const timeStr = ev.time && ev.time!=='00:00'
+        ? new Date('2000-01-01T'+ev.time).toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'})
+        : '';
+      items.push(`<div class="agenda-item">
+        <div class="agenda-time">${timeStr||'—'}</div>
+        <div class="agenda-dot" style="background:var(--purple);"></div>
+        <div class="agenda-content">
+          <div class="agenda-title">${ev.title}</div>
+          ${ev.notes?`<div class="agenda-sub">${ev.notes}</div>`:''}
+        </div>
+      </div>`);
+    });
+    todayTasks.forEach(t => {
+      const overdue = t.due < today;
+      items.push(`<div class="agenda-item">
+        <div class="agenda-time" style="color:var(--cream-faint);">task</div>
+        <div class="agenda-dot" style="background:${overdue?'var(--red)':'var(--amber)'};"></div>
+        <div class="agenda-content">
+          <div class="agenda-title">${t.title}</div>
+          <div class="agenda-sub">${t.subject||'General'}</div>
+        </div>
+        <input type="checkbox" ${t.status==='done'?'checked':''} onchange="quickDone('${t.id}',this.checked)" style="margin-left:8px;">
+      </div>`);
+    });
+    agendaEl.innerHTML = items.length ? items.join('') : '<div class="empty-state" style="padding:20px 0;">Nothing scheduled for today — enjoy your day!</div>';
+  }
+
+  // Upcoming tasks (next 5)
+  const upcoming = active.sort((a,b)=>(a.due||'9999')>(b.due||'9999')?1:-1).slice(0,5);
   const taskContainer = document.getElementById('dash-upcoming-tasks');
   if(!upcoming.length) {
     taskContainer.innerHTML = '<div class="empty-state">No pending tasks</div>';
@@ -2170,28 +2483,28 @@ function renderDashboard() {
     taskContainer.innerHTML = upcoming.map(t => {
       const diff = t.due ? daysFromNow(t.due) : null;
       let dueColor = 'var(--cream-faint)';
-      if(diff!==null) {
-        if(diff<0) dueColor='#d86058';
-        else if(diff<=2) dueColor='var(--amber)';
-      }
+      if(diff!==null){ if(diff<0) dueColor='var(--red)'; else if(diff<=2) dueColor='var(--amber)'; }
+      const diffLabel = diff===null?'No date':diff===0?'Today':diff===1?'Tomorrow':diff<0?`${Math.abs(diff)}d overdue`:`In ${diff}d`;
       return `<div class="task-item">
         <input type="checkbox" onchange="quickDone('${t.id}',this.checked)">
         <div class="task-content">
           <div class="task-title">${t.title}</div>
-          <div class="task-meta">${t.subject || 'General'} • <span style="color:${dueColor}">${t.due?formatDate(t.due):'No due date'}</span></div>
+          <div class="task-meta">${t.subject||'General'} • <span style="color:${dueColor}">${diffLabel}</span></div>
         </div>
       </div>`;
     }).join('');
   }
 
-  // Load today's journal
-  const entry = DB.get('journals').find(j=>j.date===todayStr());
+  // Today's journal
+  const entry = DB.get('journals').find(j=>j.date===today);
   if(entry) {
     document.getElementById('dash-journal-text').value = entry.text||'';
     dashMood = entry.mood||'';
-    document.querySelectorAll('#dash-mood-row .mood-btn').forEach(b => {
-      b.classList.toggle('active', b.textContent===dashMood);
-    });
+    document.querySelectorAll('#dash-mood-row .mood-btn').forEach(b=>b.classList.toggle('active',b.textContent===dashMood));
+  } else {
+    document.getElementById('dash-journal-text').value = '';
+    dashMood = '';
+    document.querySelectorAll('#dash-mood-row .mood-btn').forEach(b=>b.classList.remove('active'));
   }
 }
 
@@ -2200,10 +2513,8 @@ function quickDone(id, checked) {
   const t = list.find(x=>x.id===id); 
   if(!t) return;
   t.status = checked ? 'done' : 'todo';
-  localStorage.setItem('tasks', JSON.stringify(list));
+  localWrite('tasks', list);
   renderDashboard();
-  clearTimeout(syncTimeout);
-  if(syncEnabled && currentUser) syncToCloud();
 }
 
 // ================================================================
@@ -2211,26 +2522,71 @@ function quickDone(id, checked) {
 // ================================================================
 let currentTaskFilter = 'all';
 
+function updateFilterCounts() {
+  const allTasks = DB.get('tasks');
+  const active = allTasks.filter(t=>t.status!=='done');
+  const today = todayStr();
+  const tomorrow = (()=>{const d=new Date();d.setDate(d.getDate()+1);return d.toISOString().split('T')[0];})();
+  const weekEnd = (()=>{const d=new Date();d.setDate(d.getDate()+7);return d.toISOString().split('T')[0];})();
+  const counts = {
+    all: active.length,
+    today: active.filter(t=>t.due===today).length,
+    tomorrow: active.filter(t=>t.due===tomorrow).length,
+    week: active.filter(t=>t.due&&t.due>=today&&t.due<=weekEnd).length,
+    overdue: active.filter(t=>t.due&&t.due<today).length
+  };
+  Object.keys(counts).forEach(k=>{
+    const el = document.getElementById('fc-'+k);
+    if(el) el.textContent = counts[k];
+  });
+}
+
 function setTaskFilter(filter) {
   currentTaskFilter = filter;
-  document.querySelectorAll('.task-filter-btn').forEach(b => {
+  document.querySelectorAll('.filter-tab').forEach(b => {
     b.classList.toggle('active', b.dataset.filter === filter);
   });
   const titles = {all:'Active Tasks', today:"Today's Tasks", tomorrow:"Tomorrow's Tasks", week:'This Week', overdue:'Overdue Tasks'};
-  document.getElementById('task-list-title').textContent = titles[filter] || 'Active Tasks';
-  // Hide completed card for specific filters
+  const titleEl = document.getElementById('task-list-title');
+  if(titleEl) titleEl.textContent = titles[filter] || 'Active Tasks';
   const doneCard = document.getElementById('task-done-card');
   if(doneCard) doneCard.style.display = filter === 'all' ? '' : 'none';
   renderTasks();
 }
 
+function setTaskDue(daysFromToday) {
+  if(daysFromToday === null) {
+    document.getElementById('task-due').value = '';
+    return;
+  }
+  const d = new Date();
+  d.setDate(d.getDate() + daysFromToday);
+  document.getElementById('task-due').value = d.toISOString().split('T')[0];
+}
+
 function openAddTaskModal(preDate) {
   document.getElementById('task-title').value = '';
   document.getElementById('task-subject').value = '';
-  document.getElementById('task-due').value = preDate || todayStr();
   document.getElementById('task-priority').value = 'medium';
   document.getElementById('task-notes').value = '';
+  document.getElementById('task-subject').value = '';
+
+  // Smart default date based on active filter
+  if(preDate) {
+    document.getElementById('task-due').value = preDate;
+  } else if(currentTaskFilter === 'tomorrow') {
+    setTaskDue(1);
+  } else if(currentTaskFilter === 'week') {
+    setTaskDue(3);
+  } else if(currentTaskFilter === 'overdue' || currentTaskFilter === 'today') {
+    setTaskDue(0);
+  } else {
+    setTaskDue(0); // default to today for 'all'
+  }
+
   document.getElementById('add-task-modal').classList.remove('hidden');
+  // Focus title field
+  setTimeout(() => document.getElementById('task-title').focus(), 100);
 }
 
 function saveTask() {
@@ -2250,21 +2606,22 @@ function saveTask() {
   
   const list = DB.get('tasks');
   list.push(task);
-  localStorage.setItem('tasks', JSON.stringify(list));
+  localWrite('tasks', list);
   closeModal('add-task-modal');
-  toast('Task added');
-  // Switch to the matching filter so the new task is immediately visible
+  
+  // Show a friendly confirmation with the date
   const today = todayStr();
   const tomorrow = (() => { const d = new Date(); d.setDate(d.getDate()+1); return d.toISOString().split('T')[0]; })();
-  if(task.due === today) setTaskFilter('today');
-  else if(task.due === tomorrow) setTaskFilter('tomorrow');
-  else if(task.due && task.due > today) setTaskFilter('week');
-  else setTaskFilter('all');
+  let dateLabel = task.due ? (
+    task.due === today ? 'due today' :
+    task.due === tomorrow ? 'due tomorrow' :
+    'due ' + formatDate(task.due)
+  ) : 'no due date';
+  toast(`Task added — ${dateLabel}`);
+
+  // Always switch to 'all' so the task is guaranteed to be visible
+  setTaskFilter('all');
   renderDashboard();
-  // Force immediate sync
-  clearTimeout(syncTimeout);
-  if(syncEnabled && currentUser) syncToCloud();
-  else debounceSync();
 }
 
 function renderTasks() {
@@ -2346,6 +2703,9 @@ function renderTasks() {
     }).join('');
   }
   
+  // Update count badges on filter tabs
+  updateFilterCounts();
+
   // Done tasks (only show in 'all' filter)
   const doneEl = document.getElementById('task-list-done');
   if(doneEl) {
@@ -2373,23 +2733,17 @@ function toggleTaskStatus(id) {
   if(!t) return;
   t.status = t.status==='done' ? 'todo' : 'done';
   t.completedAt = t.status==='done' ? Date.now() : null;
-  localStorage.setItem('tasks', JSON.stringify(list));
+  localWrite('tasks', list);
   renderTasks();
   renderDashboard();
-  // Force immediate sync on status change
-  clearTimeout(syncTimeout);
-  syncToCloud();
 }
 
 function deleteTask(id) {
   const updated = DB.get('tasks').filter(t => t.id !== id);
-  localStorage.setItem('tasks', JSON.stringify(updated)); // write directly
+  localWrite('tasks', updated);
   toast('Task deleted');
   renderTasks();
   renderDashboard();
-  // Force immediate sync so deletion propagates instantly
-  clearTimeout(syncTimeout);
-  syncToCloud();
 }
 
 // ================================================================
@@ -2426,13 +2780,11 @@ function saveTest() {
   
   const list = DB.get('tests');
   list.push(test);
-  localStorage.setItem('tests', JSON.stringify(list));
+  localWrite('tests', list);
   closeModal('add-test-modal');
   toast('Test recorded');
   renderTests();
   renderDashboard();
-  clearTimeout(syncTimeout);
-  if(syncEnabled && currentUser) syncToCloud();
 }
 
 function renderTests() {
@@ -2482,12 +2834,10 @@ function renderTests() {
 
 function deleteTest(id) {
   const updated = DB.get('tests').filter(t => t.id !== id);
-  localStorage.setItem('tests', JSON.stringify(updated));
+  localWrite('tests', updated);
   toast('Test deleted');
   renderTests();
   renderDashboard();
-  clearTimeout(syncTimeout);
-  syncToCloud();
 }
 
 // ================================================================
@@ -2534,6 +2884,31 @@ function renderCalendar() {
   }
   
   document.getElementById('cal-grid').innerHTML = html;
+
+  // Render upcoming events strip (next 7 days)
+  const eventsStrip = document.getElementById('upcoming-events-strip');
+  if(eventsStrip) {
+    const today = todayStr();
+    const in7 = (()=>{const d=new Date();d.setDate(d.getDate()+7);return d.toISOString().split('T')[0];})();
+    const upcoming = DB.get('events')
+      .filter(e=>e.date>=today && e.date<=in7)
+      .sort((a,b)=>a.date===b.date?a.time.localeCompare(b.time):a.date.localeCompare(b.date));
+    if(!upcoming.length) {
+      eventsStrip.innerHTML = '';
+    } else {
+      eventsStrip.innerHTML = '<div class="events-agenda-title">Upcoming Events</div>' +
+        upcoming.map(ev => {
+          const diff = daysFromNow(ev.date);
+          const dateLabel = diff===0?'Today':diff===1?'Tomorrow':new Date(ev.date+'T00:00:00').toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'});
+          const timeStr = ev.time&&ev.time!=='00:00'?new Date('2000-01-01T'+ev.time).toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'}):'';
+          return `<div class="event-chip" onclick="selectDate('${ev.date}')">
+            <span class="event-chip-date">${dateLabel}</span>
+            <span class="event-chip-title">${ev.title}</span>
+            ${timeStr?`<span class="event-chip-time">${timeStr}</span>`:''}
+          </div>`;
+        }).join('');
+    }
+  }
 }
 
 function calPrev() {
@@ -2851,11 +3226,9 @@ function saveSession() {
   
   const sessions = DB.get('study-sessions');
   sessions.push(session);
-  localStorage.setItem('study-sessions', JSON.stringify(sessions));
+  localWrite('study-sessions', sessions);
   renderAnalytics();
   renderDashboard();
-  clearTimeout(syncTimeout);
-  if(syncEnabled && currentUser) syncToCloud();
   
   sessionStartTime = new Date(); // Reset for next segment if continuing
 }
@@ -3047,7 +3420,7 @@ function saveEvent() {
   
   const list = DB.get('events');
   list.push(ev);
-  localStorage.setItem('events', JSON.stringify(list));
+  localWrite('events', list);
   closeModal('add-event-modal');
   toast('Event saved!');
   
@@ -3055,19 +3428,14 @@ function saveEvent() {
   scheduleReminder(ev);
   renderCalendar();
   if(selectedDate === date) selectDate(date);
-  // Force immediate sync
-  clearTimeout(syncTimeout);
-  if(syncEnabled && currentUser) syncToCloud();
 }
 
 function deleteEvent(id) {
   const updated = DB.get('events').filter(e => e.id !== id);
-  localStorage.setItem('events', JSON.stringify(updated));
+  localWrite('events', updated);
   toast('Event deleted');
   renderCalendar();
   if(selectedDate) selectDate(selectedDate);
-  clearTimeout(syncTimeout);
-  if(syncEnabled && currentUser) syncToCloud();
 }
 
 // ================================================================
