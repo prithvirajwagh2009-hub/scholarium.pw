@@ -2121,164 +2121,169 @@ function updateSyncStatus(status, text) {
 //  DATABASE (localStorage)
 // ================================================================
 const COLLECTIONS = ['tasks', 'tests', 'journals', 'study-sessions', 'events'];
-
-COLLECTIONS.forEach(key => {
-  if(localStorage.getItem(key) === null) localStorage.setItem(key, '[]');
-});
+COLLECTIONS.forEach(k => { if(!localStorage.getItem(k)) localStorage.setItem(k,'[]'); });
 
 const DB = {
-  get:    k => { try { return JSON.parse(localStorage.getItem(k)) || []; } catch { return []; } },
-  getRaw: k => { try { return JSON.parse(localStorage.getItem(k)) || []; } catch { return []; } },
-  set:    (k, v) => localWrite(k, v)
+  get:    k => { try{ return JSON.parse(localStorage.getItem(k))||[]; }catch{return[];} },
+  getRaw: k => { try{ return JSON.parse(localStorage.getItem(k))||[]; }catch{return[];} },
+  set:    (k,v) => localWrite(k,v)
 };
 
 // ================================================================
 //  SYNC ENGINE — Firebase Realtime Database
-//  Simple, reliable, works on mobile.
-//  Path: /users/{uid}/{col}  (stores JSON array directly)
 // ================================================================
+let _dirty   = new Set();
+let _pushing = false;
+let _liveOff = null;   // unsubscribe handle for live listener
 
-let _dirty   = new Set();   // keys waiting to be pushed
-let _pushing = false;       // lock
-let _rtListeners = {};      // col → off() handles
-
-// ── Debug panel ─────────────────────────────────────────────────
+// ── Debug ────────────────────────────────────────────────────────
 function _dbg(msg) {
   console.log('[sync]', msg);
   const el = document.getElementById('sync-debug-log');
-  if (!el) return;
+  if(!el) return;
   const d = document.createElement('div');
-  d.textContent = new Date().toLocaleTimeString() + ' ' + msg;
+  d.textContent = new Date().toLocaleTimeString()+' '+msg;
   d.style.cssText = 'font-size:11px;padding:2px 0;border-bottom:1px solid #333;color:#c4b39a;';
   el.insertBefore(d, el.firstChild);
-  while (el.children.length > 14) el.removeChild(el.lastChild);
+  while(el.children.length > 14) el.removeChild(el.lastChild);
   const panel = document.getElementById('sync-debug-panel');
-  if (panel && panel.style.display !== 'none') _updateDebugState();
+  if(panel && panel.style.display !== 'none') _updateDebugState();
 }
 
-// ── 1. Every data write goes here ────────────────────────────────
+// ── Every write goes here ────────────────────────────────────────
 function localWrite(key, data) {
   localStorage.setItem(key, JSON.stringify(data));
+  if(!currentUser || !db) return; // offline — data safe in localStorage
   _dirty.add(key);
-  _push();
+  clearTimeout(_pushTimer);
+  _pushTimer = setTimeout(_push, 400);
 }
+let _pushTimer = null;
 
-// ── 2. Push dirty keys to RTDB ──────────────────────────────────
+// ── Push one key at a time to avoid race conditions ──────────────
 function _push() {
-  if (_pushing || !currentUser || !db) return;
-  if (_dirty.size === 0) return;
+  if(_pushing || !currentUser || !db) return;
+  if(_dirty.size === 0) return;
 
+  const col = Array.from(_dirty)[0]; // take first dirty key
+  _dirty.delete(col);
   _pushing = true;
-  const keys = Array.from(_dirty);
-  _dirty.clear();
-  updateSyncStatus('syncing', 'Saving...');
-  _dbg('push: ' + keys.join(','));
 
-  const uid = currentUser.uid;
-  let done = 0;
-  let failed = false;
+  const data = DB.getRaw(col);
+  _dbg('write '+col+' ('+data.length+')');
+  updateSyncStatus('syncing','Saving...');
 
-  keys.forEach(col => {
-    const data = DB.getRaw(col);
-    db.ref('users/' + uid + '/' + col).set(data, err => {
-      if (err) {
-        _dbg('FAIL ' + col + ': ' + err.message);
-        _dirty.add(col);  // re-queue
-        failed = true;
-      } else {
-        _dbg(col + ' ✓');
-      }
-      done++;
-      if (done === keys.length) {
-        _pushing = false;
-        if (_dirty.size > 0) {
-          // More changes came in while pushing — push again
-          setTimeout(_push, 500);
-        }
-        if (failed) {
-          updateSyncStatus('error', 'Save failed — retrying');
-          setTimeout(_push, 5000);
-        } else {
-          updateSyncStatus('synced', 'Saved ✓');
-          _dbg('done ✓');
-        }
-      }
+  db.ref('users/'+currentUser.uid+'/'+col).set(data)
+    .then(() => {
+      _dbg(col+' ✓');
+      _pushing = false;
+      if(_dirty.size > 0) setTimeout(_push, 100); // push next key
+      else { updateSyncStatus('synced','Saved ✓'); _dbg('all done ✓'); }
+    })
+    .catch(err => {
+      _dbg('FAIL '+col+': '+(err.code||err.message));
+      _dirty.add(col); // re-queue
+      _pushing = false;
+      updateSyncStatus('error','Save failed — retrying in 5s');
+      setTimeout(_push, 5000);
     });
-  });
 }
 
-// ── 3. On login: read cloud, merge with local, push back ────────
+// ── On login: load cloud, merge with local, push back ────────────
 function syncFromCloud() {
-  if (!currentUser || !db) return Promise.resolve();
+  if(!currentUser || !db) return Promise.resolve();
+  updateSyncStatus('syncing','Loading...');
+  _dbg('reading cloud...');
+
   return new Promise(resolve => {
-    _dbg('loading cloud data...');
-    updateSyncStatus('syncing', 'Loading...');
     const uid = currentUser.uid;
-    db.ref('users/' + uid).once('value', snap => {
-      const cloud = snap.val() || {};
-      COLLECTIONS.forEach(col => {
-        if (!cloud[col]) return;
-        const cloudArr = Array.isArray(cloud[col]) ? cloud[col] : Object.values(cloud[col]);
-        const local = DB.getRaw(col);
-        // Merge — local wins on same id
-        const map = new Map();
-        cloudArr.forEach(x => x && x.id && map.set(x.id, x));
-        local.forEach(x => x && x.id && map.set(x.id, x));
-        localStorage.setItem(col, JSON.stringify([...map.values()]));
-        _dbg('merged ' + col + ': cloud=' + cloudArr.length + ' local=' + local.length);
+    const timeout = setTimeout(() => {
+      _dbg('cloud read timed out — using local data');
+      updateSyncStatus('error','Load timed out');
+      resolve();
+    }, 8000);
+
+    db.ref('users/'+uid).once('value')
+      .then(snap => {
+        clearTimeout(timeout);
+        const cloud = snap.val() || {};
+        _dbg('cloud data: '+JSON.stringify(Object.keys(cloud)));
+
+        COLLECTIONS.forEach(col => {
+          const cloudRaw = cloud[col];
+          if(!cloudRaw) { _dbg('no cloud data for '+col); return; }
+          // RTDB arrays can come back as objects with numeric keys
+          const cloudArr = Array.isArray(cloudRaw)
+            ? cloudRaw.filter(Boolean)
+            : Object.values(cloudRaw).filter(Boolean);
+          const local = DB.getRaw(col);
+          // Merge — local wins on same id
+          const map = new Map();
+          cloudArr.forEach(x => x.id && map.set(x.id, x));
+          local.forEach(x => x.id && map.set(x.id, x));
+          const merged = [...map.values()];
+          localStorage.setItem(col, JSON.stringify(merged));
+          _dbg('merged '+col+': cloud='+cloudArr.length+' local='+local.length+' result='+merged.length);
+        });
+
+        refreshAllViews();
+        updateSyncStatus('synced','Up to date');
+        // Push merged result back to cloud
+        COLLECTIONS.forEach(k => _dirty.add(k));
+        _push();
+        resolve();
+      })
+      .catch(err => {
+        clearTimeout(timeout);
+        _dbg('cloud read FAILED: '+(err.code||err.message));
+        updateSyncStatus('error','Load failed: '+(err.code||'unknown'));
+        resolve(); // don't block — app still works with local data
       });
-      refreshAllViews();
-      updateSyncStatus('synced', 'Up to date');
-      // Push merged result back
-      COLLECTIONS.forEach(k => _dirty.add(k));
-      _push();
-      resolve();
-    }, err => {
-      _dbg('load FAILED: ' + err.message);
-      updateSyncStatus('error', 'Load failed');
-      resolve();
-    });
   });
 }
 
-// ── 4. Flush writes queued before auth resolved ─────────────────
+// ── Flush writes queued before auth was ready ────────────────────
 function flushDirtyKeys() {
-  _dbg('flush: dirty=[' + Array.from(_dirty).join(',') + ']');
-  if (_dirty.size > 0) _push();
+  _dbg('flush dirty=['+ Array.from(_dirty).join(',')+']');
+  if(_dirty.size > 0) _push();
 }
 
-// ── 5. Real-time listener — sync FROM another device ────────────
+// ── Live listener — updates from another device ──────────────────
 function setupSyncListeners() {
-  if (!currentUser || !db) return;
-  // Remove old listeners
-  Object.values(_rtListeners).forEach(off => off());
-  _rtListeners = {};
+  if(!currentUser || !db) return;
+  if(_liveOff) { db.ref('users/'+currentUser.uid).off('value', _liveOff); }
 
   const uid = currentUser.uid;
-  let initialLoad = true;
-  // Listen on the whole user node at once
-  db.ref('users/' + uid).on('value', snap => {
-    if (initialLoad) { initialLoad = false; return; } // skip first echo
-    if (_pushing) return; // we just wrote, ignore echo
+  let first = true;
+  _liveOff = db.ref('users/'+uid).on('value', snap => {
+    if(first) { first = false; return; } // skip initial echo
+    if(_pushing || _dirty.size > 0) return; // we're writing, ignore
     const cloud = snap.val() || {};
+    let changed = false;
     COLLECTIONS.forEach(col => {
-      if (!cloud[col]) return;
-      if (_dirty.has(col)) return; // we have a pending write for this col
-      const cloudArr = Array.isArray(cloud[col]) ? cloud[col] : Object.values(cloud[col]);
-      localStorage.setItem(col, JSON.stringify(cloudArr));
+      const cloudRaw = cloud[col];
+      if(!cloudRaw) return;
+      const cloudArr = Array.isArray(cloudRaw)
+        ? cloudRaw.filter(Boolean)
+        : Object.values(cloudRaw).filter(Boolean);
+      const local = JSON.stringify(DB.getRaw(col));
+      const cloudStr = JSON.stringify(cloudArr);
+      if(local !== cloudStr) {
+        localStorage.setItem(col, cloudStr);
+        changed = true;
+      }
     });
-    refreshAllViews();
-    _dbg('live update from cloud');
+    if(changed) { refreshAllViews(); _dbg('live update applied'); }
   });
 }
 
-// ── 6. Manual sync (Sync Now button) ────────────────────────────
+// ── Manual force sync ────────────────────────────────────────────
 function syncToCloud() {
   COLLECTIONS.forEach(k => _dirty.add(k));
   _push();
 }
 
-// ── 7. Refresh all views ────────────────────────────────────────
+// ── Refresh all views ────────────────────────────────────────────
 function refreshAllViews() {
   renderDashboard();
   renderTasks();
