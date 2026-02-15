@@ -1984,12 +1984,10 @@ function initFirebase() {
         if(drawerSignin) drawerSignin.style.display = 'none';
         if(drawerSignout) drawerSignout.style.display = '';
         
-        // Flush any writes that happened before auth was ready
-        flushPendingSync();
-        // Pull latest from cloud first, then set up live listeners
-        syncFromCloud().then(() => {
-          setupSyncListeners();
-        });
+        // Flush any writes queued before auth resolved
+        flushDirtyKeys();
+        // Merge cloud into local, push merged, then start live listeners
+        syncFromCloud().then(() => setupSyncListeners());
       } else {
         currentUser = null;
         syncEnabled = false;
@@ -2118,129 +2116,152 @@ function updateSyncStatus(status, text) {
 }
 
 // ================================================================
-//  CLOUD SYNC FUNCTIONS
+//  DATABASE
 // ================================================================
-let syncInProgress = false;
-let hasPendingWrite = false; // a local change happened while sync was running
 const COLLECTIONS = ['tasks', 'tests', 'journals', 'study-sessions', 'events'];
 
-// ── Write local data to Firestore ──────────────────────────────
-async function syncToCloud() {
-  if (!syncEnabled || !currentUser) return;
+// Initialize localStorage keys on first load
+COLLECTIONS.forEach(key => {
+  if(localStorage.getItem(key) === null) localStorage.setItem(key, '[]');
+});
 
-  if (syncInProgress) {
-    hasPendingWrite = true;
+const DB = {
+  get: (key) => { try { return JSON.parse(localStorage.getItem(key)) || []; } catch { return []; } },
+  getRaw: (key) => { try { return JSON.parse(localStorage.getItem(key)) || []; } catch { return []; } },
+  set: (key, val) => { localWrite(key, val); }
+};
+
+// ================================================================
+//  SYNC ENGINE
+//  Design: write to localStorage immediately (instant UI), then
+//  push to Firestore. If not signed in yet, queue the dirty keys
+//  and flush the moment auth resolves.
+// ================================================================
+
+let _dirtyKeys = new Set();    // collections that need pushing to cloud
+let _syncRunning = false;       // prevent overlapping push
+let _listenerUnsubs = [];       // cleanup handles for onSnapshot
+
+// ── 1. Called on every data change ─────────────────────────────
+function localWrite(key, data) {
+  // Write localStorage synchronously — UI is always instant
+  localStorage.setItem(key, JSON.stringify(data));
+  // Mark dirty and schedule push
+  _dirtyKeys.add(key);
+  _schedulePush();
+}
+
+// ── 2. Schedule a push with a short debounce ───────────────────
+let _pushTimer = null;
+function _schedulePush() {
+  if (_pushTimer) clearTimeout(_pushTimer);
+  _pushTimer = setTimeout(_doPush, 800);
+}
+
+// ── 3. Actually push dirty keys to Firestore ──────────────────
+async function _doPush() {
+  _pushTimer = null;
+  if (!currentUser || !db) {
+    // Not ready yet — leave keys in _dirtyKeys, will flush on login
     return;
   }
+  if (_syncRunning) {
+    // Re-schedule to run after current push finishes
+    _pushTimer = setTimeout(_doPush, 1000);
+    return;
+  }
+  if (_dirtyKeys.size === 0) return;
 
-  syncInProgress = true;
-  hasPendingWrite = false;
-  updateSyncStatus('syncing', 'Syncing...');
+  _syncRunning = true;
+  const keysToPush = Array.from(_dirtyKeys);
+  _dirtyKeys.clear();
+  updateSyncStatus('syncing', 'Saving...');
 
   try {
-    const userId = currentUser.uid;
     const batch = db.batch();
-
-    COLLECTIONS.forEach(col => {
-      const data = DB.getRaw(col);
-      const ref = db.collection('users').doc(userId).collection('data').doc(col);
-      batch.set(ref, { data, lastModified: firebase.firestore.FieldValue.serverTimestamp() });
+    keysToPush.forEach(col => {
+      const ref = db.collection('users').doc(currentUser.uid).collection('data').doc(col);
+      batch.set(ref, {
+        data: DB.getRaw(col),
+        ts: firebase.firestore.FieldValue.serverTimestamp()
+      });
     });
-
     await batch.commit();
-    syncInProgress = false;
-    updateSyncStatus('synced', 'Synced');
-
-    if (hasPendingWrite) {
-      hasPendingWrite = false;
-      setTimeout(syncToCloud, 500);
-    }
+    updateSyncStatus('synced', 'Saved');
   } catch (err) {
-    console.error('Sync error:', err);
-    syncInProgress = false;
-    updateSyncStatus('error', 'Sync failed');
-    setTimeout(syncToCloud, 6000); // retry
+    console.error('Push failed:', err);
+    // Put keys back so they retry
+    keysToPush.forEach(k => _dirtyKeys.add(k));
+    updateSyncStatus('error', 'Save failed — retrying');
+    _pushTimer = setTimeout(_doPush, 5000);
+  } finally {
+    _syncRunning = false;
   }
 }
 
-// ── Merge two arrays by id, local wins on conflict ────────────
-function mergeCollections(local, cloud) {
-  if (!local.length) return cloud;
-  if (!cloud.length) return local;
-  const merged = new Map();
-  // Cloud goes in first
-  cloud.forEach(item => { if(item.id) merged.set(item.id, item); });
-  // Local overwrites — local is always more up to date
-  local.forEach(item => { if(item.id) merged.set(item.id, item); });
-  return Array.from(merged.values());
-}
-
-// ── Pull cloud data, merge with local, refresh UI ──────────────
+// ── 4. On login: merge cloud into local, then push merged ──────
 async function syncFromCloud() {
-  if (!syncEnabled || !currentUser) return;
+  if (!currentUser || !db) return;
   updateSyncStatus('syncing', 'Loading...');
-
   try {
-    const userId = currentUser.uid;
-    let hadMerge = false;
-
+    const uid = currentUser.uid;
     await Promise.all(COLLECTIONS.map(async col => {
-      const doc = await db.collection('users').doc(userId).collection('data').doc(col).get();
-      if (doc.exists) {
-        const cloudData = doc.data().data || [];
-        const localData = DB.getRaw(col);
-        const merged = mergeCollections(localData, cloudData);
-        // Only write if something changed
-        if (JSON.stringify(merged) !== JSON.stringify(localData)) {
-          localStorage.setItem(col, JSON.stringify(merged));
-          hadMerge = true;
-        }
-      }
+      const snap = await db.collection('users').doc(uid).collection('data').doc(col).get();
+      if (!snap.exists) return;
+      const cloud = snap.data().data || [];
+      const local = DB.getRaw(col);
+      // Merge by id — local wins (it may have newer uncommitted data)
+      const map = new Map();
+      cloud.forEach(x => x.id && map.set(x.id, x));
+      local.forEach(x => x.id && map.set(x.id, x));
+      localStorage.setItem(col, JSON.stringify([...map.values()]));
     }));
-
     refreshAllViews();
     updateSyncStatus('synced', 'Up to date');
-
-    // If we merged in anything new, push the merged result back to cloud
-    if (hadMerge) {
-      setTimeout(syncToCloud, 500);
-    }
+    // Push merged result back so cloud is up to date too
+    COLLECTIONS.forEach(k => _dirtyKeys.add(k));
+    _doPush();
   } catch (err) {
-    console.error('Download error:', err);
+    console.error('syncFromCloud error:', err);
     updateSyncStatus('error', 'Load failed');
   }
 }
 
-// ── Real-time listeners (other devices → this device) ──────────
-let listenerUnsubs = [];
+// ── 5. Flush any writes that happened before auth was ready ────
+function flushDirtyKeys() {
+  if (_dirtyKeys.size > 0) _doPush();
+}
+
+// ── 6. Real-time listener — another device changed data ────────
 function setupSyncListeners() {
-  if (!syncEnabled || !currentUser) return;
+  if (!currentUser || !db) return;
+  _listenerUnsubs.forEach(fn => fn());
+  _listenerUnsubs = [];
 
-  // Unsubscribe any old listeners first
-  listenerUnsubs.forEach(fn => fn());
-  listenerUnsubs = [];
-
-  const userId = currentUser.uid;
-
+  const uid = currentUser.uid;
   COLLECTIONS.forEach(col => {
-    let isFirst = true; // skip the immediate local echo on first snapshot
-    const unsub = db.collection('users').doc(userId).collection('data').doc(col)
-      .onSnapshot(doc => {
-        if (isFirst) { isFirst = false; return; } // ignore initial snapshot
-        if (!doc.exists || syncInProgress) return;
-
-        const cloudData = doc.data().data || [];
-        const localData = DB.getRaw(col);
-        if (JSON.stringify(cloudData) === JSON.stringify(localData)) return;
-
-        localStorage.setItem(col, JSON.stringify(cloudData));
+    let firstSnap = true;
+    const unsub = db.collection('users').doc(uid).collection('data').doc(col)
+      .onSnapshot({ includeMetadataChanges: false }, snap => {
+        if (firstSnap) { firstSnap = false; return; } // skip local echo on setup
+        if (!snap.exists || snap.metadata.hasPendingWrites) return;
+        // Only update if this device didn't just write this key
+        if (_dirtyKeys.has(col) || _syncRunning) return;
+        const cloud = snap.data().data || [];
+        localStorage.setItem(col, JSON.stringify(cloud));
         refreshAllViews();
       });
-    listenerUnsubs.push(unsub);
+    _listenerUnsubs.push(unsub);
   });
 }
 
-// ── Refresh all UI views ────────────────────────────────────────
+// ── 7. Push all collections (used by manual Sync button) ───────
+async function syncToCloud() {
+  COLLECTIONS.forEach(k => _dirtyKeys.add(k));
+  await _doPush();
+}
+
+// ── 8. Refresh all page views ──────────────────────────────────
 function refreshAllViews() {
   renderDashboard();
   renderTasks();
@@ -2248,60 +2269,6 @@ function refreshAllViews() {
   renderAnalytics();
   renderCalendar();
 }
-
-// ── Debounced auto-sync after any local write ───────────────────
-let syncTimer = null;
-let pendingLocalWrite = false; // wrote while auth not ready yet
-
-function scheduleSync() {
-  if (!syncEnabled || !currentUser) {
-    // Not signed in yet — mark dirty so we sync once auth resolves
-    pendingLocalWrite = true;
-    return;
-  }
-  pendingLocalWrite = false;
-  if (syncTimer) clearTimeout(syncTimer);
-  syncTimer = setTimeout(() => {
-    syncTimer = null;
-    syncToCloud();
-  }, 1500);
-}
-
-// Called by onAuthStateChanged once user is confirmed
-function flushPendingSync() {
-  if (pendingLocalWrite) {
-    pendingLocalWrite = false;
-    syncToCloud();
-  }
-}
-
-// ── Helper: write to localStorage and queue sync ───────────────
-function localWrite(key, data) {
-  localStorage.setItem(key, JSON.stringify(data));
-  scheduleSync();
-}
-
-// ================================================================
-//  DATABASE & UTILS
-// ================================================================
-const DB = {
-  get: (key) => {
-    try { return JSON.parse(localStorage.getItem(key)) || []; }
-    catch { return []; }
-  },
-  getRaw: (key) => {
-    try { return JSON.parse(localStorage.getItem(key)) || []; }
-    catch { return []; }
-  },
-  set: (key, val) => {
-    localWrite(key, val);
-  }
-};
-
-// Initialize data structures (write directly, no sync trigger)
-['tasks','tests','journals','study-sessions','events'].forEach(key => {
-  if(localStorage.getItem(key) === null) localStorage.setItem(key, '[]');
-});
 
 function todayStr() {
   const d = new Date();
