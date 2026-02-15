@@ -12,7 +12,7 @@
 <!-- Firebase SDK -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/10.7.1/firebase-app-compat.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/10.7.1/firebase-auth-compat.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/10.7.1/firebase-firestore-compat.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/10.7.1/firebase-database-compat.min.js"></script>
 
 <style>
   :root {
@@ -1937,6 +1937,7 @@ const FIREBASE_CONFIG = {
   apiKey: "AIzaSyBzEPGBMB4hNsqj3fIYsPTXd_u0uEB0_tc",
   authDomain: "scholarium-eba83.firebaseapp.com",
   projectId: "scholarium-eba83",
+  databaseURL: "https://scholarium-eba83-default-rtdb.firebaseio.com",
   storageBucket: "scholarium-eba83.firebasestorage.app",
   messagingSenderId: "1001998768351",
   appId: "1:1001998768351:web:c645426c2fd574b1d4b16a",
@@ -1961,12 +1962,11 @@ function initFirebase() {
   try {
     firebaseApp = firebase.initializeApp(FIREBASE_CONFIG);
     auth = firebase.auth();
-    db = firebase.firestore();
-    // Force long-polling — prevents WebSocket hangs on mobile/restricted networks
-    db.settings({ experimentalForceLongPolling: true, merge: true });
+    db = firebase.database();
     
     // Auth state listener
     auth.onAuthStateChanged(user => {
+      _dbg('auth: ' + (user ? user.email : 'signed out'));
       if (user) {
         currentUser = user;
         syncEnabled = true;
@@ -1986,11 +1986,6 @@ function initFirebase() {
         if(drawerSignin) drawerSignin.style.display = 'none';
         if(drawerSignout) drawerSignout.style.display = '';
         
-        // Quick connectivity test — write a tiny ping doc
-        db.collection('users').doc(user.uid).set({ lastSeen: firebase.firestore.FieldValue.serverTimestamp() }, { merge: true })
-          .then(() => console.log('[sync] Firestore connectivity: OK'))
-          .catch(err => console.error('[sync] Firestore connectivity FAILED:', err.code, err.message));
-
         // Flush any writes queued before auth resolved
         flushDirtyKeys();
         // Merge cloud into local, push merged, then start live listeners
@@ -2123,190 +2118,167 @@ function updateSyncStatus(status, text) {
 }
 
 // ================================================================
-//  DATABASE
+//  DATABASE (localStorage)
 // ================================================================
 const COLLECTIONS = ['tasks', 'tests', 'journals', 'study-sessions', 'events'];
 
-// Initialize localStorage keys on first load
 COLLECTIONS.forEach(key => {
   if(localStorage.getItem(key) === null) localStorage.setItem(key, '[]');
 });
 
 const DB = {
-  get: (key) => { try { return JSON.parse(localStorage.getItem(key)) || []; } catch { return []; } },
-  getRaw: (key) => { try { return JSON.parse(localStorage.getItem(key)) || []; } catch { return []; } },
-  set: (key, val) => { localWrite(key, val); }
+  get:    k => { try { return JSON.parse(localStorage.getItem(k)) || []; } catch { return []; } },
+  getRaw: k => { try { return JSON.parse(localStorage.getItem(k)) || []; } catch { return []; } },
+  set:    (k, v) => localWrite(k, v)
 };
 
 // ================================================================
-//  SYNC ENGINE
-//  Design: write to localStorage immediately (instant UI), then
-//  push to Firestore. If not signed in yet, queue the dirty keys
-//  and flush the moment auth resolves.
+//  SYNC ENGINE — Firebase Realtime Database
+//  Simple, reliable, works on mobile.
+//  Path: /users/{uid}/{col}  (stores JSON array directly)
 // ================================================================
 
-let _dirtyKeys = new Set();    // collections that need pushing to cloud
-let _syncRunning = false;       // prevent overlapping push
-let _listenerUnsubs = [];       // cleanup handles for onSnapshot
+let _dirty   = new Set();   // keys waiting to be pushed
+let _pushing = false;       // lock
+let _rtListeners = {};      // col → off() handles
 
-// ── 1. Called on every data change ─────────────────────────────
-function localWrite(key, data) {
-  localStorage.setItem(key, JSON.stringify(data));
-  _dirtyKeys.add(key);
-  _schedulePush();
-}
-
-// ── 2. Schedule push — immediate if signed in, queued if not ──
-let _pushTimer = null;
-function _schedulePush() {
-  if (_pushTimer) clearTimeout(_pushTimer);
-  // If user ready: push in 300ms. If not: leave dirty, flush on login.
-  const delay = (currentUser && db) ? 300 : 60000;
-  _pushTimer = setTimeout(_doPush, delay);
-}
-
-// ── Debug log visible on screen ───────────────────────────────
+// ── Debug panel ─────────────────────────────────────────────────
 function _dbg(msg) {
   console.log('[sync]', msg);
-  // Write to debug panel if open
   const el = document.getElementById('sync-debug-log');
-  if(el) {
-    const line = document.createElement('div');
-    line.textContent = new Date().toLocaleTimeString() + ' ' + msg;
-    line.style.cssText = 'font-size:11px;padding:2px 0;border-bottom:1px solid #333;color:#c4b39a;';
-    el.insertBefore(line, el.firstChild);
-    while(el.children.length > 12) el.removeChild(el.lastChild);
-  }
-  // Always show panel if it exists and there's an important message
+  if (!el) return;
+  const d = document.createElement('div');
+  d.textContent = new Date().toLocaleTimeString() + ' ' + msg;
+  d.style.cssText = 'font-size:11px;padding:2px 0;border-bottom:1px solid #333;color:#c4b39a;';
+  el.insertBefore(d, el.firstChild);
+  while (el.children.length > 14) el.removeChild(el.lastChild);
   const panel = document.getElementById('sync-debug-panel');
-  if(panel && panel.style.display !== 'none') _updateDebugState();
+  if (panel && panel.style.display !== 'none') _updateDebugState();
 }
 
-// ── 3. Actually push dirty keys to Firestore ──────────────────
-// ── Write with hard timeout — Firestore can hang forever ──────
-function _timedSet(ref, payload, ms) {
-  return new Promise((resolve, reject) => {
-    const t = setTimeout(() => reject(new Error('timeout after ' + ms + 'ms')), ms);
-    ref.set(payload)
-      .then(() => { clearTimeout(t); resolve(); })
-      .catch(e => { clearTimeout(t); reject(e); });
+// ── 1. Every data write goes here ────────────────────────────────
+function localWrite(key, data) {
+  localStorage.setItem(key, JSON.stringify(data));
+  _dirty.add(key);
+  _push();
+}
+
+// ── 2. Push dirty keys to RTDB ──────────────────────────────────
+function _push() {
+  if (_pushing || !currentUser || !db) return;
+  if (_dirty.size === 0) return;
+
+  _pushing = true;
+  const keys = Array.from(_dirty);
+  _dirty.clear();
+  updateSyncStatus('syncing', 'Saving...');
+  _dbg('push: ' + keys.join(','));
+
+  const uid = currentUser.uid;
+  let done = 0;
+  let failed = false;
+
+  keys.forEach(col => {
+    const data = DB.getRaw(col);
+    db.ref('users/' + uid + '/' + col).set(data, err => {
+      if (err) {
+        _dbg('FAIL ' + col + ': ' + err.message);
+        _dirty.add(col);  // re-queue
+        failed = true;
+      } else {
+        _dbg(col + ' ✓');
+      }
+      done++;
+      if (done === keys.length) {
+        _pushing = false;
+        if (_dirty.size > 0) {
+          // More changes came in while pushing — push again
+          setTimeout(_push, 500);
+        }
+        if (failed) {
+          updateSyncStatus('error', 'Save failed — retrying');
+          setTimeout(_push, 5000);
+        } else {
+          updateSyncStatus('synced', 'Saved ✓');
+          _dbg('done ✓');
+        }
+      }
+    });
   });
 }
 
-async function _doPush() {
-  _pushTimer = null;
-
-  if (!db)          { _dbg('NO DB'); return; }
-  if (!currentUser) { _dbg('NO USER — dirty: [' + Array.from(_dirtyKeys) + ']'); return; }
-  if (_syncRunning) { _pushTimer = setTimeout(_doPush, 1200); return; }
-  if (_dirtyKeys.size === 0) return;
-
-  _syncRunning = true;
-  const keysToPush = Array.from(_dirtyKeys);
-  _dirtyKeys.clear();
-  updateSyncStatus('syncing', 'Saving...');
-  _dbg('pushing: ' + keysToPush.join(','));
-
-  const uid = currentUser.uid;
-  let anyFailed = false;
-
-  for (const col of keysToPush) {
-    const data = DB.getRaw(col);
-    _dbg('write ' + col + ' (' + data.length + ')...');
-    try {
-      await _timedSet(
-        db.collection('users').doc(uid).collection('data').doc(col),
-        { data, ts: firebase.firestore.FieldValue.serverTimestamp() },
-        10000
-      );
-      _dbg(col + ' ✓');
-    } catch (err) {
-      const msg = err.message || err.code || String(err);
-      _dbg('FAIL ' + col + ': ' + msg);
-      _dirtyKeys.add(col);
-      anyFailed = true;
-    }
-  }
-
-  _syncRunning = false;
-
-  if (anyFailed) {
-    updateSyncStatus('error', 'Retry in 6s');
-    _pushTimer = setTimeout(_doPush, 6000);
-  } else {
-    updateSyncStatus('synced', 'Saved ✓');
-    _dbg('done ✓');
-  }
-}
-
-// ── 4. On login: merge cloud into local, then push merged ──────
-async function syncFromCloud() {
-  if (!currentUser || !db) return;
-  updateSyncStatus('syncing', 'Loading...');
-  console.log('[sync] loading from cloud for uid:', currentUser.uid);
-  try {
+// ── 3. On login: read cloud, merge with local, push back ────────
+function syncFromCloud() {
+  if (!currentUser || !db) return Promise.resolve();
+  return new Promise(resolve => {
+    _dbg('loading cloud data...');
+    updateSyncStatus('syncing', 'Loading...');
     const uid = currentUser.uid;
-    for (const col of COLLECTIONS) {
-      const snap = await db.collection('users').doc(uid).collection('data').doc(col).get();
-      if (!snap.exists) {
-        console.log('[sync] no cloud data for', col);
-        continue;
-      }
-      const cloud = snap.data().data || [];
-      const local = DB.getRaw(col);
-      console.log('[sync] merging', col, '— cloud:', cloud.length, 'local:', local.length);
-      const map = new Map();
-      cloud.forEach(x => x.id && map.set(x.id, x));
-      local.forEach(x => x.id && map.set(x.id, x)); // local wins
-      localStorage.setItem(col, JSON.stringify([...map.values()]));
-    }
-    refreshAllViews();
-    updateSyncStatus('synced', 'Up to date');
-    // Push merged result back to cloud
-    COLLECTIONS.forEach(k => _dirtyKeys.add(k));
-    await _doPush();
-  } catch (err) {
-    console.error('[sync] syncFromCloud FAILED:', err.code, err.message);
-    updateSyncStatus('error', 'Load failed');
-  }
+    db.ref('users/' + uid).once('value', snap => {
+      const cloud = snap.val() || {};
+      COLLECTIONS.forEach(col => {
+        if (!cloud[col]) return;
+        const cloudArr = Array.isArray(cloud[col]) ? cloud[col] : Object.values(cloud[col]);
+        const local = DB.getRaw(col);
+        // Merge — local wins on same id
+        const map = new Map();
+        cloudArr.forEach(x => x && x.id && map.set(x.id, x));
+        local.forEach(x => x && x.id && map.set(x.id, x));
+        localStorage.setItem(col, JSON.stringify([...map.values()]));
+        _dbg('merged ' + col + ': cloud=' + cloudArr.length + ' local=' + local.length);
+      });
+      refreshAllViews();
+      updateSyncStatus('synced', 'Up to date');
+      // Push merged result back
+      COLLECTIONS.forEach(k => _dirty.add(k));
+      _push();
+      resolve();
+    }, err => {
+      _dbg('load FAILED: ' + err.message);
+      updateSyncStatus('error', 'Load failed');
+      resolve();
+    });
+  });
 }
 
-// ── 5. Flush any writes that happened before auth was ready ────
+// ── 4. Flush writes queued before auth resolved ─────────────────
 function flushDirtyKeys() {
-  _dbg('flushDirtyKeys called, dirty: ' + Array.from(_dirtyKeys).join(','));
-  if (_dirtyKeys.size > 0) _doPush();
+  _dbg('flush: dirty=[' + Array.from(_dirty).join(',') + ']');
+  if (_dirty.size > 0) _push();
 }
 
-// ── 6. Real-time listener — another device changed data ────────
+// ── 5. Real-time listener — sync FROM another device ────────────
 function setupSyncListeners() {
   if (!currentUser || !db) return;
-  _listenerUnsubs.forEach(fn => fn());
-  _listenerUnsubs = [];
+  // Remove old listeners
+  Object.values(_rtListeners).forEach(off => off());
+  _rtListeners = {};
 
   const uid = currentUser.uid;
-  COLLECTIONS.forEach(col => {
-    let firstSnap = true;
-    const unsub = db.collection('users').doc(uid).collection('data').doc(col)
-      .onSnapshot({ includeMetadataChanges: false }, snap => {
-        if (firstSnap) { firstSnap = false; return; } // skip local echo on setup
-        if (!snap.exists || snap.metadata.hasPendingWrites) return;
-        // Only update if this device didn't just write this key
-        if (_dirtyKeys.has(col) || _syncRunning) return;
-        const cloud = snap.data().data || [];
-        localStorage.setItem(col, JSON.stringify(cloud));
-        refreshAllViews();
-      });
-    _listenerUnsubs.push(unsub);
+  let initialLoad = true;
+  // Listen on the whole user node at once
+  db.ref('users/' + uid).on('value', snap => {
+    if (initialLoad) { initialLoad = false; return; } // skip first echo
+    if (_pushing) return; // we just wrote, ignore echo
+    const cloud = snap.val() || {};
+    COLLECTIONS.forEach(col => {
+      if (!cloud[col]) return;
+      if (_dirty.has(col)) return; // we have a pending write for this col
+      const cloudArr = Array.isArray(cloud[col]) ? cloud[col] : Object.values(cloud[col]);
+      localStorage.setItem(col, JSON.stringify(cloudArr));
+    });
+    refreshAllViews();
+    _dbg('live update from cloud');
   });
 }
 
-// ── 7. Push all collections (used by manual Sync button) ───────
-async function syncToCloud() {
-  COLLECTIONS.forEach(k => _dirtyKeys.add(k));
-  await _doPush();
+// ── 6. Manual sync (Sync Now button) ────────────────────────────
+function syncToCloud() {
+  COLLECTIONS.forEach(k => _dirty.add(k));
+  _push();
 }
 
-// ── 8. Refresh all page views ──────────────────────────────────
+// ── 7. Refresh all views ────────────────────────────────────────
 function refreshAllViews() {
   renderDashboard();
   renderTasks();
@@ -2404,10 +2376,10 @@ function _updateDebugState() {
   const el = document.getElementById('sync-debug-state');
   if(!el) return;
   el.textContent = [
-    'user: ' + (currentUser ? currentUser.email : 'NOT SIGNED IN'),
-    'db: ' + (db ? 'OK' : 'NULL'),
-    'dirty: [' + Array.from(_dirtyKeys).join(',') + ']',
-    'running: ' + _syncRunning,
+    'user: ' + (currentUser ? currentUser.email : 'NULL ⚠️'),
+    'db: ' + (db ? 'RTDB OK' : 'NULL ⚠️'),
+    'dirty: [' + Array.from(_dirty).join(',') + ']',
+    'pushing: ' + _pushing,
     'tasks: ' + DB.getRaw('tasks').length
   ].join(' | ');
 }
@@ -3584,8 +3556,11 @@ function rescheduleAllReminders() {
 // ================================================================
 // events already initialized above
 
-initFirebase(); // Initialize Firebase first
-setTimerMode('timer'); // Initialize timer mode
+// Wait for all scripts to load before touching Firebase
+window.addEventListener('load', function() {
+  initFirebase();
+});
+setTimerMode('timer');
 renderDashboard();
 rescheduleAllReminders();
 
