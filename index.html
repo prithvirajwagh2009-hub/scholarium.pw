@@ -1012,9 +1012,9 @@
     display: flex;
     align-items: center;
     gap: 6px;
-    opacity: 0;
+    opacity: 0.4;
     pointer-events: none;
-    transition: opacity .3s;
+    transition: opacity .3s, border-color .3s, color .3s;
     font-family: var(--font-mono);
   }
   .sync-status.show { opacity: 1; }
@@ -1413,6 +1413,10 @@
   </div>
   <div class="drawer-section-label">Settings</div>
   <div class="drawer-grid" style="padding-bottom:20px;">
+    <div class="drawer-item" onclick="showSyncDebug(); closeDrawer();">
+      <svg class="icon-outline" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"></circle><path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14"></path></svg>
+      <span>Sync Debug</span>
+    </div>
     <div class="drawer-item" onclick="toggleTheme(); closeDrawer();">
       <svg class="icon-outline" viewBox="0 0 24 24"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>
       <span id="drawer-theme-label">Theme</span>
@@ -1958,6 +1962,8 @@ function initFirebase() {
     firebaseApp = firebase.initializeApp(FIREBASE_CONFIG);
     auth = firebase.auth();
     db = firebase.firestore();
+    // Force long-polling — prevents WebSocket hangs on mobile/restricted networks
+    db.settings({ experimentalForceLongPolling: true, merge: true });
     
     // Auth state listener
     auth.onAuthStateChanged(user => {
@@ -2145,39 +2151,54 @@ let _listenerUnsubs = [];       // cleanup handles for onSnapshot
 
 // ── 1. Called on every data change ─────────────────────────────
 function localWrite(key, data) {
-  // Write localStorage synchronously — UI is always instant
   localStorage.setItem(key, JSON.stringify(data));
-  // Mark dirty and schedule push
   _dirtyKeys.add(key);
   _schedulePush();
 }
 
-// ── 2. Schedule a push with a short debounce ───────────────────
+// ── 2. Schedule push — immediate if signed in, queued if not ──
 let _pushTimer = null;
 function _schedulePush() {
   if (_pushTimer) clearTimeout(_pushTimer);
-  _pushTimer = setTimeout(_doPush, 800);
+  // If user ready: push in 300ms. If not: leave dirty, flush on login.
+  const delay = (currentUser && db) ? 300 : 60000;
+  _pushTimer = setTimeout(_doPush, delay);
 }
 
 // ── Debug log visible on screen ───────────────────────────────
 function _dbg(msg) {
   console.log('[sync]', msg);
+  // Write to debug panel if open
   const el = document.getElementById('sync-debug-log');
-  if(!el) return;
-  const line = document.createElement('div');
-  line.textContent = new Date().toLocaleTimeString() + ' ' + msg;
-  line.style.cssText = 'font-size:11px;padding:2px 0;border-bottom:1px solid #333;';
-  el.insertBefore(line, el.firstChild);
-  while(el.children.length > 8) el.removeChild(el.lastChild);
+  if(el) {
+    const line = document.createElement('div');
+    line.textContent = new Date().toLocaleTimeString() + ' ' + msg;
+    line.style.cssText = 'font-size:11px;padding:2px 0;border-bottom:1px solid #333;color:#c4b39a;';
+    el.insertBefore(line, el.firstChild);
+    while(el.children.length > 12) el.removeChild(el.lastChild);
+  }
+  // Always show panel if it exists and there's an important message
+  const panel = document.getElementById('sync-debug-panel');
+  if(panel && panel.style.display !== 'none') _updateDebugState();
 }
 
 // ── 3. Actually push dirty keys to Firestore ──────────────────
+// ── Write with hard timeout — Firestore can hang forever ──────
+function _timedSet(ref, payload, ms) {
+  return new Promise((resolve, reject) => {
+    const t = setTimeout(() => reject(new Error('timeout after ' + ms + 'ms')), ms);
+    ref.set(payload)
+      .then(() => { clearTimeout(t); resolve(); })
+      .catch(e => { clearTimeout(t); reject(e); });
+  });
+}
+
 async function _doPush() {
   _pushTimer = null;
 
-  if (!db) { _dbg('NO DB — Firebase not init'); return; }
-  if (!currentUser) { _dbg('NO USER — queued: ' + Array.from(_dirtyKeys).join(',')); return; }
-  if (_syncRunning) { _pushTimer = setTimeout(_doPush, 1000); return; }
+  if (!db)          { _dbg('NO DB'); return; }
+  if (!currentUser) { _dbg('NO USER — dirty: [' + Array.from(_dirtyKeys) + ']'); return; }
+  if (_syncRunning) { _pushTimer = setTimeout(_doPush, 1200); return; }
   if (_dirtyKeys.size === 0) return;
 
   _syncRunning = true;
@@ -2186,25 +2207,35 @@ async function _doPush() {
   updateSyncStatus('syncing', 'Saving...');
   _dbg('pushing: ' + keysToPush.join(','));
 
-  try {
-    const uid = currentUser.uid;
-    for (const col of keysToPush) {
-      const data = DB.getRaw(col);
-      _dbg('writing ' + col + ' (' + data.length + ' items)');
-      await db.collection('users').doc(uid)
-              .collection('data').doc(col)
-              .set({ data, ts: firebase.firestore.FieldValue.serverTimestamp() });
-      _dbg('wrote ' + col + ' OK');
+  const uid = currentUser.uid;
+  let anyFailed = false;
+
+  for (const col of keysToPush) {
+    const data = DB.getRaw(col);
+    _dbg('write ' + col + ' (' + data.length + ')...');
+    try {
+      await _timedSet(
+        db.collection('users').doc(uid).collection('data').doc(col),
+        { data, ts: firebase.firestore.FieldValue.serverTimestamp() },
+        10000
+      );
+      _dbg(col + ' ✓');
+    } catch (err) {
+      const msg = err.message || err.code || String(err);
+      _dbg('FAIL ' + col + ': ' + msg);
+      _dirtyKeys.add(col);
+      anyFailed = true;
     }
+  }
+
+  _syncRunning = false;
+
+  if (anyFailed) {
+    updateSyncStatus('error', 'Retry in 6s');
+    _pushTimer = setTimeout(_doPush, 6000);
+  } else {
     updateSyncStatus('synced', 'Saved ✓');
-    _dbg('all done ✓');
-  } catch (err) {
-    _dbg('FAILED: ' + err.code + ' — ' + err.message);
-    keysToPush.forEach(k => _dirtyKeys.add(k));
-    updateSyncStatus('error', err.code || 'Save failed');
-    _pushTimer = setTimeout(_doPush, 5000);
-  } finally {
-    _syncRunning = false;
+    _dbg('done ✓');
   }
 }
 
@@ -2242,6 +2273,7 @@ async function syncFromCloud() {
 
 // ── 5. Flush any writes that happened before auth was ready ────
 function flushDirtyKeys() {
+  _dbg('flushDirtyKeys called, dirty: ' + Array.from(_dirtyKeys).join(','));
   if (_dirtyKeys.size > 0) _doPush();
 }
 
@@ -2353,6 +2385,10 @@ function closeIfBackdrop(e, id) {
 
 // Clock
 let _clockTaps = 0, _clockTapTimer = null;
+function showSyncDebug() {
+  const panel = document.getElementById('sync-debug-panel');
+  if(panel) { panel.style.display = 'block'; _updateDebugState(); }
+}
 function tapClock() {
   _clockTaps++;
   clearTimeout(_clockTapTimer);
