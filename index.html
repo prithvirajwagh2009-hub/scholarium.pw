@@ -1346,7 +1346,7 @@
         <button class="btn btn-sm btn-ghost" onclick="signOut()" style="flex:1;font-size:.7rem;">Sign Out</button>
       </div>
     </div>
-    <div class="clock" id="clock">00:00:00</div>
+    <div class="clock" id="clock" onclick="tapClock()" style="cursor:pointer;user-select:none;" title="Tap 3x for debug">00:00:00</div>
     <div style="margin-top:8px;color:var(--cream-faint);font-size:.7rem;">
       Est. <span id="year">2026</span>
     </div>
@@ -1959,10 +1959,6 @@ function initFirebase() {
     auth = firebase.auth();
     db = firebase.firestore();
     
-    // Enable offline persistence
-    db.enablePersistence({ synchronizeTabs: true })
-      .catch(err => console.log("Persistence error:", err));
-    
     // Auth state listener
     auth.onAuthStateChanged(user => {
       if (user) {
@@ -1984,6 +1980,11 @@ function initFirebase() {
         if(drawerSignin) drawerSignin.style.display = 'none';
         if(drawerSignout) drawerSignout.style.display = '';
         
+        // Quick connectivity test — write a tiny ping doc
+        db.collection('users').doc(user.uid).set({ lastSeen: firebase.firestore.FieldValue.serverTimestamp() }, { merge: true })
+          .then(() => console.log('[sync] Firestore connectivity: OK'))
+          .catch(err => console.error('[sync] Firestore connectivity FAILED:', err.code, err.message));
+
         // Flush any writes queued before auth resolved
         flushDirtyKeys();
         // Merge cloud into local, push merged, then start live listeners
@@ -2091,17 +2092,17 @@ function updateSyncStatus(status, text) {
     if(dotEl) dotEl.classList.add('pulse');
   } else if(status === 'synced') {
     statusEl.classList.add('synced', 'show');
-    _syncHideTimer = setTimeout(() => statusEl.classList.remove('show'), 1800);
+    _syncHideTimer = setTimeout(() => statusEl.classList.remove('show'), 2500);
   } else if(status === 'error') {
     statusEl.classList.add('error', 'show');
+    // errors stay visible until next sync attempt
   } else {
-    // offline or other — just hide after delay
     _syncHideTimer = setTimeout(() => statusEl.classList.remove('show'), 3000);
   }
 
   if(textEl) textEl.textContent = text;
 
-  // Update drawer auth buttons based on sign-in state
+  // Update drawer auth buttons
   const drawerSignin = document.getElementById('drawer-signin-btn');
   const drawerSignout = document.getElementById('drawer-signout-btn');
   if(drawerSignin && drawerSignout) {
@@ -2158,41 +2159,49 @@ function _schedulePush() {
   _pushTimer = setTimeout(_doPush, 800);
 }
 
+// ── Debug log visible on screen ───────────────────────────────
+function _dbg(msg) {
+  console.log('[sync]', msg);
+  const el = document.getElementById('sync-debug-log');
+  if(!el) return;
+  const line = document.createElement('div');
+  line.textContent = new Date().toLocaleTimeString() + ' ' + msg;
+  line.style.cssText = 'font-size:11px;padding:2px 0;border-bottom:1px solid #333;';
+  el.insertBefore(line, el.firstChild);
+  while(el.children.length > 8) el.removeChild(el.lastChild);
+}
+
 // ── 3. Actually push dirty keys to Firestore ──────────────────
 async function _doPush() {
   _pushTimer = null;
-  if (!currentUser || !db) {
-    // Not ready yet — leave keys in _dirtyKeys, will flush on login
-    return;
-  }
-  if (_syncRunning) {
-    // Re-schedule to run after current push finishes
-    _pushTimer = setTimeout(_doPush, 1000);
-    return;
-  }
+
+  if (!db) { _dbg('NO DB — Firebase not init'); return; }
+  if (!currentUser) { _dbg('NO USER — queued: ' + Array.from(_dirtyKeys).join(',')); return; }
+  if (_syncRunning) { _pushTimer = setTimeout(_doPush, 1000); return; }
   if (_dirtyKeys.size === 0) return;
 
   _syncRunning = true;
   const keysToPush = Array.from(_dirtyKeys);
   _dirtyKeys.clear();
   updateSyncStatus('syncing', 'Saving...');
+  _dbg('pushing: ' + keysToPush.join(','));
 
   try {
-    const batch = db.batch();
-    keysToPush.forEach(col => {
-      const ref = db.collection('users').doc(currentUser.uid).collection('data').doc(col);
-      batch.set(ref, {
-        data: DB.getRaw(col),
-        ts: firebase.firestore.FieldValue.serverTimestamp()
-      });
-    });
-    await batch.commit();
-    updateSyncStatus('synced', 'Saved');
+    const uid = currentUser.uid;
+    for (const col of keysToPush) {
+      const data = DB.getRaw(col);
+      _dbg('writing ' + col + ' (' + data.length + ' items)');
+      await db.collection('users').doc(uid)
+              .collection('data').doc(col)
+              .set({ data, ts: firebase.firestore.FieldValue.serverTimestamp() });
+      _dbg('wrote ' + col + ' OK');
+    }
+    updateSyncStatus('synced', 'Saved ✓');
+    _dbg('all done ✓');
   } catch (err) {
-    console.error('Push failed:', err);
-    // Put keys back so they retry
+    _dbg('FAILED: ' + err.code + ' — ' + err.message);
     keysToPush.forEach(k => _dirtyKeys.add(k));
-    updateSyncStatus('error', 'Save failed — retrying');
+    updateSyncStatus('error', err.code || 'Save failed');
     _pushTimer = setTimeout(_doPush, 5000);
   } finally {
     _syncRunning = false;
@@ -2203,26 +2212,30 @@ async function _doPush() {
 async function syncFromCloud() {
   if (!currentUser || !db) return;
   updateSyncStatus('syncing', 'Loading...');
+  console.log('[sync] loading from cloud for uid:', currentUser.uid);
   try {
     const uid = currentUser.uid;
-    await Promise.all(COLLECTIONS.map(async col => {
+    for (const col of COLLECTIONS) {
       const snap = await db.collection('users').doc(uid).collection('data').doc(col).get();
-      if (!snap.exists) return;
+      if (!snap.exists) {
+        console.log('[sync] no cloud data for', col);
+        continue;
+      }
       const cloud = snap.data().data || [];
       const local = DB.getRaw(col);
-      // Merge by id — local wins (it may have newer uncommitted data)
+      console.log('[sync] merging', col, '— cloud:', cloud.length, 'local:', local.length);
       const map = new Map();
       cloud.forEach(x => x.id && map.set(x.id, x));
-      local.forEach(x => x.id && map.set(x.id, x));
+      local.forEach(x => x.id && map.set(x.id, x)); // local wins
       localStorage.setItem(col, JSON.stringify([...map.values()]));
-    }));
+    }
     refreshAllViews();
     updateSyncStatus('synced', 'Up to date');
-    // Push merged result back so cloud is up to date too
+    // Push merged result back to cloud
     COLLECTIONS.forEach(k => _dirtyKeys.add(k));
-    _doPush();
+    await _doPush();
   } catch (err) {
-    console.error('syncFromCloud error:', err);
+    console.error('[sync] syncFromCloud FAILED:', err.code, err.message);
     updateSyncStatus('error', 'Load failed');
   }
 }
@@ -2339,6 +2352,29 @@ function closeIfBackdrop(e, id) {
 }
 
 // Clock
+let _clockTaps = 0, _clockTapTimer = null;
+function tapClock() {
+  _clockTaps++;
+  clearTimeout(_clockTapTimer);
+  _clockTapTimer = setTimeout(() => { _clockTaps = 0; }, 1500);
+  if(_clockTaps >= 3) {
+    _clockTaps = 0;
+    const panel = document.getElementById('sync-debug-panel');
+    panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+    _updateDebugState();
+  }
+}
+function _updateDebugState() {
+  const el = document.getElementById('sync-debug-state');
+  if(!el) return;
+  el.textContent = [
+    'user: ' + (currentUser ? currentUser.email : 'NOT SIGNED IN'),
+    'db: ' + (db ? 'OK' : 'NULL'),
+    'dirty: [' + Array.from(_dirtyKeys).join(',') + ']',
+    'running: ' + _syncRunning,
+    'tasks: ' + DB.getRaw('tasks').length
+  ].join(' | ');
+}
 function updateClock() {
   const now = new Date();
   const h = String(now.getHours()).padStart(2,'0');
@@ -3524,5 +3560,19 @@ setTimeout(() => {
   }
 }, 3000);
 </script>
+
+<!-- Sync Debug Panel (tap clock 3x to show) -->
+<div id="sync-debug-panel" style="display:none;position:fixed;bottom:70px;left:0;right:0;background:#0a0907;border-top:2px solid #d4a854;z-index:9000;padding:12px;max-height:220px;overflow-y:auto;">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+    <span style="font-family:monospace;font-size:12px;color:#d4a854;">SYNC DEBUG</span>
+    <div style="display:flex;gap:8px;">
+      <button onclick="_doPush()" style="font-family:monospace;font-size:11px;background:#2d2720;border:1px solid #5a4d42;color:#e4bc6e;padding:3px 8px;cursor:pointer;border-radius:3px;">Force Push</button>
+      <button onclick="syncFromCloud()" style="font-family:monospace;font-size:11px;background:#2d2720;border:1px solid #5a4d42;color:#5a9a85;padding:3px 8px;cursor:pointer;border-radius:3px;">Pull Cloud</button>
+      <button onclick="document.getElementById('sync-debug-panel').style.display='none'" style="font-family:monospace;font-size:11px;background:#2d2720;border:1px solid #5a4d42;color:#8a7a65;padding:3px 8px;cursor:pointer;border-radius:3px;">Close</button>
+    </div>
+  </div>
+  <div style="font-family:monospace;font-size:11px;color:#8a7a65;margin-bottom:6px;" id="sync-debug-state"></div>
+  <div id="sync-debug-log"></div>
+</div>
 </body>
 </html>
