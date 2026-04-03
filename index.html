@@ -865,6 +865,23 @@ select option{background:var(--surface4);}
     <div class="ovb">
       <div style="display:flex;flex-direction:column;gap:10px;padding-top:3px;">
         <div style="background:var(--surface3);border:1px solid var(--border2);border-radius:5px;padding:12px 14px;">
+          <div style="font-size:12px;color:var(--text);margin-bottom:3px;">Cloud sync (Supabase)</div>
+          <div style="font-family:'JetBrains Mono',monospace;font-size:8.5px;color:var(--text3);margin-bottom:8px;line-height:1.5;">Last-write-wins. Create a free project, run the SQL from <code style="color:var(--gold2);">scholarium_supabase.sql</code> in the SQL Editor, then paste URL + anon key here. Use the same account on phone and laptop.</div>
+          <input class="finput" type="url" id="sync-url" placeholder="https://xxxx.supabase.co" style="margin-bottom:6px;"/>
+          <input class="finput" type="password" id="sync-key" placeholder="Supabase anon public key" style="margin-bottom:6px;font-family:'JetBrains Mono',monospace;font-size:11px;"/>
+          <input class="finput" type="email" id="sync-email" placeholder="Email" autocomplete="email" style="margin-bottom:6px;"/>
+          <input class="finput" type="password" id="sync-pass" placeholder="Password" autocomplete="current-password" style="margin-bottom:8px;"/>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px;">
+            <button type="button" class="bgold" onclick="syncSaveConfig();syncRefreshExportUI();">Save connection</button>
+            <button type="button" class="bghost" onclick="syncDoSignUp()">Sign up</button>
+            <button type="button" class="bghost" onclick="syncDoSignIn()">Sign in</button>
+            <button type="button" class="bghost" onclick="syncDoSignOut()">Sign out</button>
+            <button type="button" class="bgold" onclick="syncDoNow()">Sync now</button>
+            <button type="button" class="bghost" onclick="syncPullOnly()">Pull only</button>
+          </div>
+          <div id="sync-status" style="font-family:'JetBrains Mono',monospace;font-size:8px;color:var(--text3);min-height:14px;"></div>
+        </div>
+        <div style="background:var(--surface3);border:1px solid var(--border2);border-radius:5px;padding:12px 14px;">
           <div style="font-size:12px;color:var(--text);margin-bottom:3px;">Full JSON Backup / Restore</div>
           <div style="font-family:'JetBrains Mono',monospace;font-size:8.5px;color:var(--text3);margin-bottom:8px;">Complete data snapshot. Always export before clearing browser data.</div>
           <div style="display:flex;gap:7px;flex-wrap:wrap;">
@@ -938,7 +955,7 @@ function gsc(s) {
   if (!scMap[k]) { scMap[k] = SUBJ_COLS[scIdx++ % SUBJ_COLS.length]; saveScMap(); }
   return scMap[k];
 }
-function saveScMap() { localStorage.setItem('scr_scmap', JSON.stringify(scMap)); }
+function saveScMap() { localStorage.setItem('scr_scmap', JSON.stringify(scMap)); bumpSyncVersion(); scheduleSyncPush(); }
 function gcSubjectMap() {
   const active = new Set();
   Object.values(S.tasks).forEach(a => a.forEach(t => { if (t.subject) active.add(t.subject.trim().toLowerCase()); }));
@@ -980,7 +997,133 @@ function uid(prefix='id'){
   if (globalThis.crypto && typeof globalThis.crypto.randomUUID === 'function') return prefix + globalThis.crypto.randomUUID();
   return prefix + Date.now().toString(16) + Math.random().toString(16).slice(2);
 }
-function save(){localStorage.setItem('scr_tasks',JSON.stringify(S.tasks));localStorage.setItem('scr_logs',JSON.stringify(S.logs));checkStorageWarning();}
+/** Last-write-wins: monotonic client revision for sync (ms). */
+function bumpSyncVersion(){const v=Date.now();localStorage.setItem('scr_sync_v',String(v));return v;}
+function getLocalSyncV(){return parseInt(localStorage.getItem('scr_sync_v')||'0',10)||0;}
+
+let _syncClientCache=null,_syncPushTimer=null;
+async function getSyncClient(){
+  const url=(localStorage.getItem('scr_supabase_url')||'').trim();
+  const key=(localStorage.getItem('scr_supabase_key')||'').trim();
+  if(!url||!key)return null;
+  if(_syncClientCache&&_syncClientCache._u===url&&_syncClientCache._k===key)return _syncClientCache.client;
+  const {createClient}=await import('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm');
+  const client=createClient(url,key);
+  _syncClientCache={client,_u:url,_k:key};
+  return client;
+}
+function resetSyncClient(){_syncClientCache=null;}
+function buildSyncPayload(){
+  return{version:3,updatedAt:getLocalSyncV()||Date.now(),tasks:S.tasks,logs:S.logs,scMap,weeklyGoalHrs:S.weeklyGoalHrs};
+}
+function applyRemotePayload(p){
+  if(!p||!p.tasks||!p.logs)return;
+  S.tasks=p.tasks;S.logs=p.logs;
+  if(p.scMap){scMap=JSON.parse(JSON.stringify(p.scMap));scIdx=Object.keys(scMap).length;localStorage.setItem('scr_scmap',JSON.stringify(scMap));}
+  if(p.weeklyGoalHrs!=null){S.weeklyGoalHrs=p.weeklyGoalHrs;localStorage.setItem('scr_wgoal',String(S.weeklyGoalHrs));}
+  localStorage.setItem('scr_tasks',JSON.stringify(S.tasks));
+  localStorage.setItem('scr_logs',JSON.stringify(S.logs));
+  if(p.updatedAt)localStorage.setItem('scr_sync_v',String(p.updatedAt));
+  if(document.getElementById('wgoal-input'))document.getElementById('wgoal-input').value=S.weeklyGoalHrs||'';
+  selDay(today.getFullYear(),today.getMonth(),today.getDate());
+  renderCal();renderTasks();renderAgenda();renderLog();checkCarry();renderStats();renderHeatmap();renderSubjBreak();renderLogHist();
+  if(S.viewMode==='week')renderWeekView();
+}
+function scheduleSyncPush(){
+  if(!localStorage.getItem('scr_supabase_url')||!localStorage.getItem('scr_supabase_key'))return;
+  clearTimeout(_syncPushTimer);
+  _syncPushTimer=setTimeout(()=>{syncPush().catch(e=>{console.warn('Sync push failed',e);syncSetStatus(String(e.message||e));});},2000);
+}
+async function syncPush(){
+  const c=await getSyncClient();if(!c)return;
+  const{data:{session}}=await c.auth.getSession();if(!session)return;
+  bumpSyncVersion();
+  const payload=buildSyncPayload();
+  const{error}=await c.from('scholarium_data').upsert({user_id:session.user.id,payload:payload,updated_at:new Date().toISOString()},{onConflict:'user_id'});
+  if(error)throw error;
+  syncSetStatus('Saved to cloud · '+new Date().toLocaleTimeString());
+}
+/** Last-write-wins: newer payload.updatedAt wins. */
+async function syncMergeAfterLogin(){
+  const c=await getSyncClient();if(!c)throw new Error('Configure Supabase URL and anon key.');
+  const{data:{session}}=await c.auth.getSession();if(!session)return;
+  const{data,error}=await c.from('scholarium_data').select('payload').eq('user_id',session.user.id).maybeSingle();
+  if(error)throw error;
+  const localV=getLocalSyncV();
+  if(data&&data.payload){
+    const remoteV=parseInt(data.payload.updatedAt||0,10)||0;
+    if(remoteV>localV){applyRemotePayload(data.payload);syncSetStatus('Loaded newer data from cloud (last-write-wins).');return;}
+  }
+  await syncPush();
+  syncSetStatus('Uploaded to cloud.');
+}
+async function syncPullOnly(){
+  const c=await getSyncClient();if(!c){alert('Save Supabase URL and anon key first.');return;}
+  const{data:{session}}=await c.auth.getSession();if(!session){alert('Sign in first.');return;}
+  const{data,error}=await c.from('scholarium_data').select('payload').eq('user_id',session.user.id).maybeSingle();
+  if(error)throw error;
+  if(!data||!data.payload){syncSetStatus('No cloud data yet.');return;}
+  const remoteV=parseInt(data.payload.updatedAt||0,10)||0;
+  const localV=getLocalSyncV();
+  if(remoteV>localV){applyRemotePayload(data.payload);syncSetStatus('Pulled newer data from cloud.');}
+  else{syncSetStatus('Cloud is not newer than this device.');}
+}
+function syncSetStatus(t){const el=document.getElementById('sync-status');if(el)el.textContent=t;}
+function syncRefreshExportUI(){
+  const u=document.getElementById('sync-url'),k=document.getElementById('sync-key');
+  if(u)u.value=localStorage.getItem('scr_supabase_url')||'';
+  if(k)k.value=localStorage.getItem('scr_supabase_key')||'';
+  getSyncClient().then(async c=>{
+    if(!c){syncSetStatus('Not configured.');return;}
+    const{data:{session}}=await c.auth.getSession();
+    syncSetStatus(session?('Signed in as '+session.user.email):'Not signed in.');
+  }).catch(()=>syncSetStatus('Not configured.'));
+}
+function syncSaveConfig(){
+  const url=document.getElementById('sync-url').value.trim();
+  const key=document.getElementById('sync-key').value.trim();
+  if(!url||!key){alert('Enter both Project URL and anon public key.');return;}
+  localStorage.setItem('scr_supabase_url',url);localStorage.setItem('scr_supabase_key',key);
+  resetSyncClient();syncRefreshExportUI();
+}
+async function syncDoSignUp(){
+  try{syncSaveConfig();const c=await getSyncClient();if(!c)return;
+  const email=document.getElementById('sync-email').value.trim();
+  const password=document.getElementById('sync-pass').value;
+  if(!email||!password){alert('Email and password required.');return;}
+  const{error}=await c.auth.signUp({email,password});
+  if(error)throw error;
+  await syncMergeAfterLogin();
+  alert('Account created. If email confirmation is enabled in Supabase, check your inbox before signing in again.');
+  syncRefreshExportUI();
+  }catch(e){alert(e.message||String(e));}
+}
+async function syncDoSignIn(){
+  try{syncSaveConfig();const c=await getSyncClient();if(!c)return;
+  const email=document.getElementById('sync-email').value.trim();
+  const password=document.getElementById('sync-pass').value;
+  if(!email||!password){alert('Email and password required.');return;}
+  const{error}=await c.auth.signInWithPassword({email,password});
+  if(error)throw error;
+  await syncMergeAfterLogin();
+  syncRefreshExportUI();
+  }catch(e){alert(e.message||String(e));}
+}
+async function syncDoSignOut(){
+  try{const c=await getSyncClient();if(c)await c.auth.signOut();
+  resetSyncClient();syncRefreshExportUI();
+  }catch(e){alert(e.message||String(e));}
+}
+async function syncDoNow(){try{await syncMergeAfterLogin();syncRefreshExportUI();}catch(e){alert(e.message||String(e));}}
+async function syncInit(){
+  try{
+    const c=await getSyncClient();if(!c)return;
+    const{data:{session}}=await c.auth.getSession();
+    if(session)await syncMergeAfterLogin();
+  }catch(e){console.warn('syncInit',e);}
+}
+
+function save(){localStorage.setItem('scr_tasks',JSON.stringify(S.tasks));localStorage.setItem('scr_logs',JSON.stringify(S.logs));checkStorageWarning();bumpSyncVersion();scheduleSyncPush();}
 function addDays(date,n){const d=new Date(date);d.setDate(d.getDate()+n);return d;}
 function getWeekStart(d){const c=new Date(d);c.setDate(c.getDate()-c.getDay());return c;}
 function rebuildSC(){Object.values(S.tasks).forEach(a=>a.forEach(t=>{if(t.subject)gsc(t.subject)}));}
@@ -1375,7 +1518,7 @@ function renderStats(){
   for(let i=0;i<365;i++){const k=dk(itDate.getFullYear(),itDate.getMonth(),itDate.getDate());const tasks=S.tasks[k]||[];const active=tasks.some(t=>t.done)||(tasks.reduce((a,t)=>a+(t.elapsed||0),0)>0);if(i===0&&!active){}else if(!active)break;else streak++;if(i<14){const dot=document.createElement('span');dot.className='streak-day';dot.style.background=active?'var(--gold)':'var(--surface3)';dot.style.border=active?'none':'1px solid var(--border2)';dot.title=k+(active?' ✓':'');sb.prepend(dot);}itDate.setDate(itDate.getDate()-1);}
   document.getElementById('s-streak').textContent=streak;renderWeeklyGoal(ws);
 }
-function saveWeeklyGoal(){const v=parseFloat(document.getElementById('wgoal-input').value)||0;S.weeklyGoalHrs=v;localStorage.setItem('scr_wgoal',v);renderStats();}
+function saveWeeklyGoal(){const v=parseFloat(document.getElementById('wgoal-input').value)||0;S.weeklyGoalHrs=v;localStorage.setItem('scr_wgoal',v);bumpSyncVersion();scheduleSyncPush();renderStats();}
 function renderWeeklyGoal(weekSecs){const goal=S.weeklyGoalHrs;const inp=document.getElementById('wgoal-input');if(!inp.value&&goal)inp.value=goal;const bar=document.getElementById('wgoal-bar');const txt=document.getElementById('wgoal-txt');if(!goal){bar.style.width='0%';txt.textContent='Set a weekly hour goal above.';return;}const goalSecs=goal*3600;const pct=Math.min(100,Math.round((weekSecs/goalSecs)*100));bar.style.width=pct+'%';bar.className=pct>=100?'hit':'';const done=(weekSecs/3600).toFixed(1);txt.textContent=`${done}h / ${goal}h — ${pct}%${pct>=100?' ✓ Goal hit!':''}`;}
 
 function renderHeatmap(){
@@ -1429,7 +1572,7 @@ function renderReg(){
 }
 document.addEventListener('click',e=>{const th=e.target.closest('#rt th[data-col]');if(!th)return;const col=th.dataset.col;if(rSort.col===col)rSort.dir=rSort.dir==='asc'?'desc':'asc';else{rSort.col=col;rSort.dir='desc';}renderReg();});
 
-function openExport(){document.getElementById('exp-ov').classList.add('open');}
+function openExport(){document.getElementById('exp-ov').classList.add('open');syncRefreshExportUI();}
 function dl(name,content,type){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([content],{type}));a.download=name;a.click();}
 function exportJSON(){const payload={version:2,exported:new Date().toISOString(),tasks:S.tasks,logs:S.logs,scMap,weeklyGoalHrs:S.weeklyGoalHrs};dl('scriptorium_backup.json',JSON.stringify(payload,null,2),'application/json');}
 function importJSON(input){const file=input.files[0];if(!file)return;const reader=new FileReader();reader.onload=(e)=>{try{const data=JSON.parse(e.target.result);if(!data.tasks||!data.logs)throw new Error('Invalid backup file.');if(!confirm(`This will REPLACE all your current data with the backup from ${data.exported||'unknown date'}.\n\nAre you sure?`))return;S.tasks=data.tasks;S.logs=data.logs;if(data.scMap){scMap=data.scMap;scIdx=Object.keys(scMap).length;saveScMap();}if(data.weeklyGoalHrs){S.weeklyGoalHrs=data.weeklyGoalHrs;localStorage.setItem('scr_wgoal',S.weeklyGoalHrs);}save();selDay(today.getFullYear(),today.getMonth(),today.getDate());renderCal();renderStats();renderHeatmap();renderSubjBreak();renderLogHist();alert('Import successful!');}catch(err){alert('Import failed: '+err.message);}};reader.readAsText(file);input.value='';}
