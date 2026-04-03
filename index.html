@@ -29,9 +29,22 @@ html,body{height:100%;background:radial-gradient(120% 80% at 50% 0%,#1a1712 0%,v
 #quote-bar{grid-column:1/-1;background:var(--surface2);border-bottom:1px solid var(--border);padding:6px 16px;display:flex;align-items:center;gap:12px;overflow:hidden;border-top:1px solid rgba(184,149,74,.08);}
 #quote-text{font-family:'IM Fell English',serif;font-size:11px;color:var(--text2);font-style:italic;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.35;}
 #quote-author{font-family:'JetBrains Mono',monospace;font-size:8px;color:var(--gold-dim);white-space:nowrap;letter-spacing:.06em;}
-#main{padding:14px 16px 14px 18px;overflow-y:auto;background:var(--paper);border-right:1px solid var(--border);box-shadow:inset 1px 0 0 rgba(184,149,74,.12);}
+#main{padding:14px 16px 14px 18px;overflow-y:auto;background:var(--paper);border-right:1px solid var(--border);box-shadow:inset 1px 0 0 rgba(184,149,74,.12);min-height:0;}
+/* Adaptive shell: one product, two layouts — stacked (default/mobile), master–detail (wide) */
+.main-shell{display:flex;flex-direction:column;gap:12px;flex:1;min-height:0;}
+.main-col-hd{display:none;font-family:'JetBrains Mono',monospace;font-size:7px;letter-spacing:.14em;text-transform:uppercase;color:var(--text3);margin:0 0 8px;padding-bottom:4px;border-bottom:1px solid var(--border);}
+.main-plan,.main-detail{min-width:0;}
 #sidebar{background:linear-gradient(180deg,#0c0b09 0%,#100e0b 40%,#0d0c0a 100%);border-left:1px solid var(--border);overflow-y:auto;box-shadow:inset 1px 0 0 rgba(0,0,0,.4);}
 #mob-nav{display:none;}
+
+@media (min-width:900px){
+  #main{display:flex;flex-direction:column;overflow:hidden;padding:12px 14px 14px 18px;}
+  #main > #storage-warn{flex-shrink:0;}
+  .main-shell{flex:1;min-height:0;display:grid;grid-template-columns:minmax(268px,360px) minmax(0,1fr);gap:0 22px;align-items:stretch;overflow:hidden;}
+  .main-col-hd{display:block;}
+  .main-plan{border-right:1px solid var(--border);padding-right:18px;padding-bottom:12px;overflow-y:auto;-webkit-overflow-scrolling:touch;}
+  .main-detail{padding-left:2px;overflow-y:auto;-webkit-overflow-scrolling:touch;}
+}
 
 /* ── Header ── */
 .brand{display:flex;align-items:baseline;gap:10px;}
@@ -528,6 +541,9 @@ select option{background:var(--surface4);}
     <button onclick="openExport()">Export</button>
   </div>
 
+  <div class="main-shell">
+  <aside class="main-plan" id="main-plan" aria-label="Plan — calendar and search">
+    <p class="main-col-hd">Plan</p>
   <div id="quick-search-wrap">
     <input id="quick-search" type="text" placeholder="Quick search tasks…" oninput="quickSearch(this.value)" autocomplete="off"/>
     <button id="qs-clear" onclick="clearQS()">✕</button>
@@ -589,6 +605,10 @@ select option{background:var(--surface4);}
   </div>
 
   <div id="carry-banner"><span id="carry-msg"></span><button id="carry-btn" onclick="carryForward()">Move to Today →</button></div>
+  </aside>
+
+  <section class="main-detail" id="main-detail" aria-label="Today — agenda and tasks">
+    <p class="main-col-hd">Today</p>
   <div id="agenda" aria-live="polite">
     <div id="agenda-top">
       <div id="agenda-title">Daily Agenda</div>
@@ -655,6 +675,8 @@ select option{background:var(--surface4);}
   </div>
 
   <div id="tasks-list"></div>
+  </section>
+  </div>
 </div>
 
 <!-- SIDEBAR -->
@@ -1444,4 +1466,3 @@ mobInit();
 </script>
 </body>
 </html>
-
