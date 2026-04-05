@@ -36,6 +36,8 @@ html,body{height:100%;background:radial-gradient(120% 80% at 50% 0%,#1a1712 0%,v
 .main-plan,.main-detail{min-width:0;}
 #sidebar{background:linear-gradient(180deg,#0c0b09 0%,#100e0b 40%,#0d0c0a 100%);border-left:1px solid var(--border);overflow-y:auto;box-shadow:inset 1px 0 0 rgba(0,0,0,.4);}
 #mob-nav{display:none;}
+#mob-log-panel{display:none;}
+#mob-notices-wrap{display:block;}
 
 @media (min-width:900px){
   #main{display:flex;flex-direction:column;overflow:hidden;padding:12px 14px 14px 18px;}
@@ -512,9 +514,20 @@ select option{background:var(--surface4);}
   #quote-bar{display:none;}
 
   /* Panels — flex:1 + min-height:0 so bottom bar stays in view */
-  #main,#sidebar{display:none;flex:1 1 auto;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:10px 12px 16px;}
+  #main,#sidebar,#mob-log-panel{display:none;flex:1 1 auto;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:10px 12px 80px;}
   #main.mob-active,#sidebar.mob-active{display:block;}
+  #mob-log-panel.mob-active{display:flex;flex-direction:column;}
   #sidebar{border-left:none;}
+  /* mob-log-panel inner section styles */
+  .mob-log-section{padding-bottom:18px;border-bottom:1px solid var(--border);margin-bottom:18px;}
+  .mob-log-section:last-child{border-bottom:none;margin-bottom:0;}
+  .mob-log-sbt{font-family:var(--font-display);font-size:14px;font-weight:600;color:var(--text2);margin-bottom:10px;padding-bottom:6px;border-bottom:1px solid var(--border);}
+  #mob-log-ta:focus{border-color:var(--gold)!important;}
+  /* mob-log-panel styles */
+  .mob-log-section{padding-bottom:16px;border-bottom:1px solid var(--border);margin-bottom:16px;}
+  .mob-log-section:last-child{border-bottom:none;margin-bottom:0;}
+  .mob-log-sbt{font-family:var(--font-display);font-size:14px;font-weight:600;color:var(--text2);margin-bottom:10px;padding-bottom:6px;border-bottom:1px solid var(--border);}
+  #mob-log-ta:focus{border-color:var(--gold)!important;}
 
   /* Bottom nav (inside #app flex column) */
   #mob-nav{display:flex;flex-shrink:0;flex-grow:0;height:calc(var(--mob-nav) + env(safe-area-inset-bottom, 0px));padding-bottom:env(safe-area-inset-bottom, 0px);background:var(--surface2);border-top:1px solid var(--border2);z-index:50;position:relative;}
@@ -575,7 +588,7 @@ select option{background:var(--surface4);}
   #task-form{padding:11px;}
   #day-hdr{margin-top:8px;padding-top:8px;}
 
-  /* Notices — mobile fixes */
+  /* ── Notices — mobile fixes ── */
   .notice-text{font-size:16px!important;}
   .notice-slip{padding:9px 40px 9px 11px;}
   .notice-del{opacity:1!important;width:30px;height:30px;top:50%;right:4px;transform:translateY(-50%);display:flex;align-items:center;justify-content:center;font-size:13px;}
@@ -584,6 +597,30 @@ select option{background:var(--surface4);}
   .nac{width:13px;height:13px;}
   .notice-accent-row{gap:6px;}
   #notices-add-btn{padding:10px;font-size:9px;margin-top:8px;}
+
+  /* ── Sidebar on mobile: Overview + Subjects only, no reorder tricks ── */
+  #sidebar .sbs-log,#sidebar .sbs-archive{display:none!important;}
+
+  /* ── Compact Overview stat boxes: single row of 4 ── */
+  .sgrid{grid-template-columns:repeat(4,1fr);gap:4px;}
+  .sbox{padding:7px 3px;}
+  .sval{font-size:13px;}
+  .slbl{font-size:5.5px;letter-spacing:0;}
+
+  /* ── Slim daily ring: shrink SVG, tighten text ── */
+  #daily-ring-wrap{padding:6px 10px;gap:8px;margin-top:6px;}
+  #daily-ring-svg{width:36px;height:36px;flex-shrink:0;}
+  #ring-val{font-size:13px;}
+  #ring-goal-lbl{font-size:6px;}
+  #ring-pct{font-size:7.5px;}
+  .ring-goal-row input[type=number]{font-size:16px!important;width:44px;}
+
+  /* ── Compact weekly goal bar ── */
+  #wgoal-wrap{margin-top:6px;}
+  .wgoal-row label{font-size:7px;}
+  .wgoal-row input[type=number]{font-size:16px!important;}
+  #wgoal-txt{font-size:7px;}
+  #streak-bar{margin-top:4px;}
 }
 
 /* Very small phones */
@@ -594,6 +631,9 @@ select option{background:var(--surface4);}
   .notice-meta{font-size:7px;}
   .nmt{padding:5px 8px;}
 }
+
+/* ── Notices wrap in main column (desktop + mobile) ── */
+#mob-notices-wrap{padding:0 0 10px;margin-bottom:8px;border-bottom:1px solid var(--border);}
 
 /* ── Daily ring ── */
 #daily-ring-wrap{display:flex;align-items:center;gap:10px;margin-top:8px;padding:8px 10px;background:rgba(0,0,0,.18);border:1px solid var(--border);border-radius:4px;}
@@ -737,6 +777,17 @@ select option{background:var(--surface4);}
     </div>
   </div>
 
+  <!-- Notices: visible on mobile calendar view, hidden on desktop (sidebar has it) -->
+  <div id="mob-notices-wrap">
+    <div class="sbt" style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+      <span style="font-family:'Playfair Display',serif;font-size:13px;font-weight:600;color:var(--text2);">Notices</span>
+      <span style="font-family:'JetBrains Mono',monospace;font-size:6.5px;color:var(--text3);letter-spacing:.06em;">pin anything</span>
+    </div>
+    <div id="notices-list"></div>
+    <div id="notices-empty" style="display:none;">Nothing pinned yet.</div>
+    <button id="notices-add-btn" onclick="addNotice()">+ pin a note</button>
+  </div>
+
   <div id="view-tabs">
     <button class="vtab active" data-view="month" onclick="switchView('month')">Month</button>
     <button class="vtab" data-view="week" onclick="switchView('week')">Week</button>
@@ -844,7 +895,7 @@ select option{background:var(--surface4);}
 
 <!-- SIDEBAR -->
 <div id="sidebar">
-  <div class="sbs">
+  <div class="sbs sbs-overview">
     <div class="sbt">Overview</div>
     <div class="sgrid">
       <div class="sbox"><div class="sval" id="s-today">0m</div><div class="slbl">Today</div></div>
@@ -881,21 +932,13 @@ select option{background:var(--surface4);}
       <div id="wgoal-txt"></div>
     </div>
   </div>
-  <div class="sbs">
-    <div class="sbt" style="display:flex;align-items:center;justify-content:space-between;">
-      <span>Notices</span>
-      <span style="font-family:'JetBrains Mono',monospace;font-size:6.5px;color:var(--text3);letter-spacing:.06em;font-weight:400;">pin anything</span>
-    </div>
-    <div id="notices-list"></div>
-    <div id="notices-empty" style="display:none;">Nothing pinned yet.</div>
-    <button id="notices-add-btn" onclick="addNotice()">+ pin a note</button>
-  </div>
-  <div class="sbs">
+
+  <div class="sbs sbs-subjects">
     <div class="sbt">Subject Breakdown</div>
     <div id="sbars"></div>
     <div id="slegend"></div>
   </div>
-  <div class="sbs">
+  <div class="sbs sbs-log">
     <div class="sbt">Daily Log — <span id="log-dt"></span></div>
     <textarea id="log-ta" placeholder="Write your reflections for today…" rows="3"></textarea>
     <div class="tmrs">
@@ -908,9 +951,30 @@ select option{background:var(--surface4);}
     </div>
     <button id="save-log">Save Log</button>
   </div>
-  <div class="sbs">
+  <div class="sbs sbs-archive">
     <div class="sbt">Log Archive</div>
     <div id="log-hist"></div>
+  </div>
+</div>
+
+<!-- MOBILE LOG PANEL -->
+<div id="mob-log-panel">
+  <div class="mob-log-section">
+    <div class="mob-log-sbt">Daily Log — <span id="mob-log-dt"></span></div>
+    <textarea id="mob-log-ta" placeholder="Write your reflections for today…" rows="4" style="width:100%;background:var(--surface3);border:1px solid var(--border2);color:var(--text);font-family:'IM Fell English',serif;font-size:15px;line-height:1.6;padding:9px 10px;border-radius:4px;resize:vertical;min-height:110px;outline:none;transition:border-color .1s;"></textarea>
+    <div class="tmrs" style="margin-top:12px;">
+      <h4>Tasks for Tomorrow</h4>
+      <div class="tmr-row">
+        <input type="text" id="mob-tmr-in" placeholder="Add tomorrow's task…" style="flex:1;background:var(--surface3);border:1px solid var(--border2);color:var(--text);font-family:'Playfair Display',serif;font-size:16px;padding:6px 8px;border-radius:3px;outline:none;transition:border-color .1s;"/>
+        <button class="tadd" id="mob-tmr-add">+</button>
+      </div>
+      <div id="mob-tmr-list"></div>
+    </div>
+    <button id="mob-save-log" style="width:100%;margin-top:12px;background:var(--gold);color:var(--ink);border:none;padding:11px;border-radius:3px;font-weight:700;font-size:13px;cursor:pointer;font-family:'Playfair Display',serif;transition:background .15s;">Save Log</button>
+  </div>
+  <div class="mob-log-section">
+    <div class="mob-log-sbt">Log Archive</div>
+    <div id="mob-log-hist"></div>
   </div>
 </div>
 
@@ -928,7 +992,7 @@ select option{background:var(--surface4);}
     <svg viewBox="0 0 24 24"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
     <span>Revisions</span>
   </button>
-  <button class="mnb" data-panel="sidebar-log" onclick="mobSwitch('sidebar-log')">
+  <button class="mnb" data-panel="mob-log" onclick="mobSwitch('mob-log')">
     <svg viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
     <span>Log</span>
   </button>
@@ -1216,7 +1280,25 @@ function rgba(hex, a) {
   return `rgba(${r},${g},${b},${a})`;
 }
 
-const today = new Date();
+// PATCH L1: today must never be cached — midnight users would see wrong
+// carry-forward banner, wrong calendar highlight, wrong streak, wrong ring.
+// We keep a module-level `today` binding but refresh it at local midnight.
+let today = new Date();
+(function scheduleMidnightRefresh() {
+  const now = new Date();
+  const msUntilMidnight = new Date(
+    now.getFullYear(), now.getMonth(), now.getDate() + 1, 0, 0, 5
+  ).getTime() - now.getTime();
+  setTimeout(() => {
+    today = new Date();
+    renderCal();
+    renderStats();
+    renderDailyRing();
+    checkCarry();
+    if (S.viewMode === 'week') renderWeekView();
+    scheduleMidnightRefresh();
+  }, msUntilMidnight);
+})();
 let S = {
   viewY: today.getFullYear(), viewM: today.getMonth(),
   viewWeekStart: getWeekStart(today),
@@ -1278,6 +1360,7 @@ function applyRemotePayload(p){
   if(document.getElementById('dgoal-input')){document.getElementById('dgoal-input').value=S.dailyGoalHrs||'';renderDailyRing();}
   selDay(today.getFullYear(),today.getMonth(),today.getDate());
   renderCal();renderTasks();renderAgenda();renderLog();checkCarry();renderStats();renderHeatmap();renderSubjBreak();renderLogHist();renderNotices();
+  if(typeof syncMobLog==='function')syncMobLog();
   if(S.viewMode==='week')renderWeekView();
 }
 function scheduleSyncPush(){
@@ -1417,7 +1500,13 @@ const QQ=[
   {t:"We are what we repeatedly do. Excellence, then, is not an act but a habit.",a:"Aristotle"},
   {t:"The greatest glory in living lies not in never falling, but in rising every time we fall.",a:"Nelson Mandela"},
 ];
-function renderQuote(){const i=Math.floor(Date.now()/86400000)%QQ.length;document.getElementById('quote-text').textContent='"'+QQ[i].t+'"';document.getElementById('quote-author').textContent='— '+QQ[i].a;}
+function renderQuote(){
+  // PATCH P7: use local date so quote rotates at local midnight, not UTC midnight
+  const d=new Date();
+  const localDay=d.getFullYear()*10000+d.getMonth()*100+d.getDate();
+  const i=localDay%QQ.length;
+  document.getElementById('quote-text').textContent='"'+QQ[i].t+'"';document.getElementById('quote-author').textContent='— '+QQ[i].a;
+}
 
 function tickClock(){const n=new Date();document.getElementById('clock').textContent=n.toLocaleDateString('en-IN',{weekday:'short',day:'numeric',month:'short'})+' · '+n.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',second:'2-digit'});}
 
@@ -1518,6 +1607,7 @@ function selDay(y,m,d){
   S.selDate={y,m,d};S.viewWeekStart=getWeekStart(new Date(y,m,d));
   if(S.viewMode==='month')renderCal();else renderWeekView();
   renderTasks();renderAgenda();renderLog();checkCarry();
+  if(isMobile&&isMobile())syncMobLog();
 }
 
 function checkCarry(){
@@ -1536,7 +1626,8 @@ function carryForward(){
   const k=selK();if(!k)return;const tk=todayK();
   if(!S.tasks[tk])S.tasks[tk]=[];
   const existingTitles=new Set(S.tasks[tk].map(t=>t.title));
-  (S.tasks[k]||[]).filter(t=>!t.done&&!t.originTaskKey).forEach(t=>{if(!existingTitles.has(t.title)){S.tasks[tk].push({...t,id:uid('t'),elapsed:0,sessions:[],originDate:k});existingTitles.add(t.title);}});
+  // PATCH P10: also exclude recurring children — they have future instances already planted
+  (S.tasks[k]||[]).filter(t=>!t.done&&!t.originTaskKey&&!t.recParent).forEach(t=>{if(!existingTitles.has(t.title)){S.tasks[tk].push({...t,id:uid('t'),elapsed:0,sessions:[],originDate:k});existingTitles.add(t.title);}});
   S.tasks[k]=(S.tasks[k]||[]).filter(t=>t.done||t.originTaskKey);
   save();S.selDate={y:today.getFullYear(),m:today.getMonth(),d:today.getDate()};
   S.viewY=today.getFullYear();S.viewM=today.getMonth();
@@ -1600,7 +1691,19 @@ function saveTask(){
 function plantRecurring(task,fromKey,rec){
   const [y,mo,d]=fromKey.split('-').map(Number);const base=new Date(y,mo-1,d);
   const limits={daily:14,weekly:8,monthly:3};const count=limits[rec]||7;
-  for(let i=1;i<=count;i++){let nd;if(rec==='daily')nd=addDays(base,i);else if(rec==='weekly')nd=addDays(base,7*i);else nd=addMonths(base,i);const nk=dk(nd.getFullYear(),nd.getMonth(),nd.getDate());if(!S.tasks[nk])S.tasks[nk]=[];S.tasks[nk].push({...task,id:uid('rec'),elapsed:0,done:false,sessions:[],revisionDate:null,recParent:fromKey,recurrence:null});}
+  for(let i=1;i<=count;i++){
+    let nd;
+    if(rec==='daily')nd=addDays(base,i);
+    else if(rec==='weekly')nd=addDays(base,7*i);
+    else nd=addMonths(base,i);
+    const nk=dk(nd.getFullYear(),nd.getMonth(),nd.getDate());
+    if(!S.tasks[nk])S.tasks[nk]=[];
+    // PATCH H3: skip if a recurring child from this parent already exists on this date
+    const alreadyExists=S.tasks[nk].some(x=>x.recParent===fromKey&&x.title===task.title);
+    if(!alreadyExists){
+      S.tasks[nk].push({...task,id:uid('rec'),elapsed:0,done:false,sessions:[],revisionDate:null,recParent:fromKey,recurrence:null});
+    }
+  }
 }
 
 function openEdit(key,idx){
@@ -1680,15 +1783,43 @@ function renderTasks(){
       </div>
       ${isRev?`<div class="sm2-wrap${t.done?' show':''}"><span class="sm2-lbl">Rate recall:</span><button class="sm2-btn" data-q="0">Blackout</button><button class="sm2-btn" data-q="1">Hard</button><button class="sm2-btn" data-q="2">Good</button><button class="sm2-btn" data-q="3">Easy</button>${sm2Next?`<span class="sm2-next">${sm2Next}</span>`:''}</div>`:''}
       <div class="spanel" id="sp-${t.id}"><div class="sp-title">Session History (last 5)</div>${sessRows}</div>`;
-    card.querySelector('.chk').onclick=()=>{toggleDone(i);if(isRev){const wrap=card.querySelector('.sm2-wrap');if(wrap)wrap.classList.add('show');}};
-    card.querySelector('.tb.dl').onclick=()=>deleteTask(i);
-    card.querySelector('.tb.ed').onclick=()=>openEdit(k,i);
-    card.querySelector('.tb.sh').onclick=()=>document.getElementById('sp-'+t.id).classList.toggle('open');
+    // PATCH H1+H2: capture task id, not array index i.
+    // Index i is stale if a task is added/removed between render and click.
+    // Look up fresh index at mutation time using the stable task id.
+    const capturedId = t.id;
+    function idxById(key, id) {
+      return (S.tasks[key] || []).findIndex(x => x.id === id);
+    }
+    card.querySelector('.chk').onclick=()=>{
+      const freshIdx=idxById(k,capturedId); if(freshIdx===-1)return;
+      toggleDone(freshIdx);
+      if(isRev){const wrap=card.querySelector('.sm2-wrap');if(wrap)wrap.classList.add('show');}
+    };
+    card.querySelector('.tb.dl').onclick=()=>{
+      const freshIdx=idxById(k,capturedId); if(freshIdx===-1)return;
+      deleteTask(freshIdx);
+    };
+    card.querySelector('.tb.ed').onclick=()=>{
+      const freshIdx=idxById(k,capturedId); if(freshIdx===-1)return;
+      openEdit(k,freshIdx);
+    };
+    card.querySelector('.tb.sh').onclick=()=>document.getElementById('sp-'+capturedId).classList.toggle('open');
     const pomBtn=card.querySelector('.tb.pom');
-    if(pomBtn) pomBtn.onclick=()=>linkPomodoro(t.id,k,t.title);
+    if(pomBtn) pomBtn.onclick=()=>linkPomodoro(capturedId,k,t.title);
     const tb=card.querySelector('.tb.st,.tb.sp');
-    if(tb){if(tb.classList.contains('sp'))tb.onclick=()=>stopTimer(t.id);else tb.onclick=()=>startTimer(t.id,k,i);}
-    card.querySelectorAll('.sm2-btn').forEach(btn=>{btn.onclick=()=>rateSM2(k,i,parseInt(btn.dataset.q));});
+    if(tb){
+      if(tb.classList.contains('sp')) tb.onclick=()=>stopTimer(capturedId);
+      else tb.onclick=()=>{
+        const freshIdx=idxById(k,capturedId); if(freshIdx===-1)return;
+        startTimer(capturedId,k,freshIdx);
+      };
+    }
+    card.querySelectorAll('.sm2-btn').forEach(btn=>{
+      btn.onclick=()=>{
+        const freshIdx=idxById(k,capturedId); if(freshIdx===-1)return;
+        rateSM2(k,freshIdx,parseInt(btn.dataset.q));
+      };
+    });
     const ol=card.querySelector('.opt-note[title="Jump to original"]');
     if(ol&&t.originTaskKey){ol.onclick=()=>{const pp=t.originTaskKey.split('-');selDay(+pp[0],+pp[1]-1,+pp[2]);S.viewY=+pp[0];S.viewM=+pp[1]-1;if(S.viewMode==='month')renderCal();else renderWeekView();};}
     list.appendChild(card);
@@ -1718,8 +1849,10 @@ function undoDelete(){
 
 function rateSM2(k,idx,q){
   const t=S.tasks[k][idx];if(!t.sm2)return;
-  // Guard: prevent re-rating if already rated this session (lastQ set and task is done)
-  if(t.done&&t.sm2.lastQ!=null)return;
+  // PATCH C1: guard against re-rating at ANY point, not just when done.
+  // Without this each extra button click plants a new revision card,
+  // silently polluting the queue with duplicates over weeks of use.
+  if(t.sm2.lastQ != null) return;
   let{ef,interval,reps}=t.sm2;
   if(q<2){reps=0;interval=1;}else{if(reps===0)interval=1;else if(reps===1)interval=6;else interval=Math.round(interval*ef);reps++;}
   ef=Math.max(1.3,ef+0.1-(3-q)*(0.08+(3-q)*0.02));
@@ -1734,8 +1867,25 @@ function rateSM2(k,idx,q){
 
 function startTimer(id,k,idx){if(S.timers[id]&&S.timers[id].active)return;S.timers[id]={active:true,start:Date.now(),k,id};renderTasks();}
 function stopTimer(id){
-  const timer=S.timers[id];if(!timer||!timer.active)return;const added=Math.floor((Date.now()-timer.start)/1000);
-  for(const k of Object.keys(S.tasks)){const idx=S.tasks[k].findIndex(t=>t.id===id);if(idx!==-1){const task=S.tasks[k][idx];task.elapsed=(task.elapsed||0)+added;if(!task.sessions)task.sessions=[];const n=new Date();task.sessions.push({date:SM[n.getMonth()]+' '+n.getDate(),dur:added,ts:Date.now()});if(task.sessions.length>20)task.sessions=task.sessions.slice(-20);break;}}
+  const timer=S.timers[id];if(!timer||!timer.active)return;
+  const added=Math.floor((Date.now()-timer.start)/1000);
+  // PATCH C2b: search ALL date keys by task id, not just timer.k,
+  // so time lands correctly even if the task was moved via the edit overlay.
+  let found=false;
+  for(const k of Object.keys(S.tasks)){
+    const idx=S.tasks[k].findIndex(t=>t.id===id);
+    if(idx!==-1){
+      const task=S.tasks[k][idx];
+      task.elapsed=(task.elapsed||0)+added;
+      if(!task.sessions)task.sessions=[];
+      const n=new Date();
+      task.sessions.push({date:SM[n.getMonth()]+' '+n.getDate(),dur:added,ts:Date.now()});
+      if(task.sessions.length>20)task.sessions=task.sessions.slice(-20);
+      found=true;
+      break;
+    }
+  }
+  if(!found)console.warn('stopTimer: task',id,'not found — time discarded');
   delete S.timers[id];save();renderTasks();renderStats();renderHeatmap();renderSubjBreak();
 }
 function tickTimers(){
@@ -1906,8 +2056,12 @@ function openRegistry(){document.getElementById('reg-ov').classList.add('open');
 function closeRegistry(){document.getElementById('reg-ov').classList.remove('open');}
 function clearReg(){['rq','rsq','rtg','rdf','rdt'].forEach(id=>document.getElementById(id).value='');document.getElementById('rst').value='all';document.getElementById('rpri').value='all';renderReg();}
 function getAllT(){const a=[];Object.entries(S.tasks).forEach(([k,ts])=>ts.forEach(t=>a.push({...t,dateKey:k})));return a;}
-function bulkMarkDone(){if(!_lastRegTasks.length)return;const pending=_lastRegTasks.filter(t=>!t.done);if(!pending.length){alert('No pending tasks in current filter.');return;}if(!confirm(`Mark ${pending.length} task(s) as done?`))return;pending.forEach(t=>{const arr=S.tasks[t.dateKey];if(!arr)return;const idx=arr.findIndex(x=>x.id===t.id);if(idx!==-1)arr[idx].done=true;});save();renderReg();renderTasks();renderStats();renderCal();renderHeatmap();}
-function bulkDelete(){if(!_lastRegTasks.length)return;if(!confirm(`Permanently delete ${_lastRegTasks.length} task(s)?`))return;_lastRegTasks.forEach(t=>{const arr=S.tasks[t.dateKey];if(!arr)return;const idx=arr.findIndex(x=>x.id===t.id);if(idx!==-1){arr.splice(idx,1);if(!S.tasks[t.dateKey].length)delete S.tasks[t.dateKey];}});save();renderReg();renderTasks();renderStats();renderCal();renderHeatmap();renderSubjBreak();}
+function bulkMarkDone(){
+  renderReg(); // PATCH P9: refresh snapshot before acting — stale _lastRegTasks mutates wrong tasks
+  if(!_lastRegTasks.length)return;const pending=_lastRegTasks.filter(t=>!t.done);if(!pending.length){alert('No pending tasks in current filter.');return;}if(!confirm(`Mark ${pending.length} task(s) as done?`))return;pending.forEach(t=>{const arr=S.tasks[t.dateKey];if(!arr)return;const idx=arr.findIndex(x=>x.id===t.id);if(idx!==-1)arr[idx].done=true;});save();renderReg();renderTasks();renderStats();renderCal();renderHeatmap();}
+function bulkDelete(){
+  renderReg(); // PATCH P9: refresh before destructive op
+  if(!_lastRegTasks.length)return;if(!confirm(`Permanently delete ${_lastRegTasks.length} task(s)?`))return;_lastRegTasks.forEach(t=>{const arr=S.tasks[t.dateKey];if(!arr)return;const idx=arr.findIndex(x=>x.id===t.id);if(idx!==-1){arr.splice(idx,1);if(!S.tasks[t.dateKey].length)delete S.tasks[t.dateKey];}});save();renderReg();renderTasks();renderStats();renderCal();renderHeatmap();renderSubjBreak();}
 function renderReg(){
   const q=document.getElementById('rq').value.trim().toLowerCase();const sq=document.getElementById('rsq').value.trim().toLowerCase();const tg=document.getElementById('rtg').value.trim().toLowerCase().replace(/^#+/,'');const df=document.getElementById('rdf').value;const dt=document.getElementById('rdt').value;const st=document.getElementById('rst').value;const pr=document.getElementById('rpri').value;
   let ts=getAllT();if(q)ts=ts.filter(t=>t.title.toLowerCase().includes(q));if(sq)ts=ts.filter(t=>(t.subject||'').toLowerCase().includes(sq));if(tg)ts=ts.filter(t=>(t.tags||[]).some(tag=>tag.toLowerCase().includes(tg)));if(df)ts=ts.filter(t=>t.dateKey>=df);if(dt)ts=ts.filter(t=>t.dateKey<=dt);if(st==='done')ts=ts.filter(t=>t.done);if(st==='pending')ts=ts.filter(t=>!t.done);if(pr!=='all')ts=ts.filter(t=>t.priority===pr);
@@ -2148,20 +2302,116 @@ syncInit();
 function isMobile(){return window.matchMedia('(max-width:640px)').matches;}
 function openMobMenu(){document.getElementById('mob-menu-ov').classList.add('open');}
 function closeMobMenu(){document.getElementById('mob-menu-ov').classList.remove('open');}
+
 function mobSwitch(panel){
   if(!isMobile())return;
-  // Overlay-trigger panels (revq, tomorrow) are handled by their own open functions; don't switch panels
   if(panel==='mob-revq'||panel==='mob-tomorrow')return;
+  // hide all panels
   document.getElementById('main').classList.remove('mob-active');
   document.getElementById('sidebar').classList.remove('mob-active');
+  document.getElementById('mob-log-panel').classList.remove('mob-active');
   document.querySelectorAll('.mnb').forEach(b=>b.classList.remove('active'));
-  const activeBtn=document.querySelector(`.mnb[data-panel="${panel}"]`);if(activeBtn)activeBtn.classList.add('active');
-  if(panel==='main'){document.getElementById('main').classList.add('mob-active');}
-  else{document.getElementById('sidebar').classList.add('mob-active');const secMap={'sidebar-stats':0,'sidebar-log':3,'sidebar-archive':4};const sec=secMap[panel];if(sec!==undefined){const sections=document.querySelectorAll('#sidebar .sbs');if(sections[sec])setTimeout(()=>sections[sec].scrollIntoView({behavior:'smooth',block:'start'}),80);}}
+  const activeBtn=document.querySelector(`.mnb[data-panel="${panel}"]`);
+  if(activeBtn)activeBtn.classList.add('active');
+  if(panel==='main'){
+    document.getElementById('main').classList.add('mob-active');
+  } else if(panel==='mob-log'){
+    document.getElementById('mob-log-panel').classList.add('mob-active');
+    syncMobLog();
+  } else {
+    document.getElementById('sidebar').classList.add('mob-active');
+    // scroll to correct section within sidebar
+    const secMap={'sidebar-stats':0,'sidebar-archive':4};
+    const sec=secMap[panel];
+    if(sec!==undefined){
+      const sections=document.querySelectorAll('#sidebar .sbs');
+      if(sections[sec])setTimeout(()=>sections[sec].scrollIntoView({behavior:'smooth',block:'start'}),80);
+    }
+  }
 }
+
+// Sync mob-log panel with real log state
+function syncMobLog(){
+  const s=S.selDate;const k=selK()||todayK();
+  const d=s?new Date(s.y,s.m,s.d):new Date();
+  document.getElementById('mob-log-dt').textContent=SM[d.getMonth()]+' '+d.getDate()+', '+d.getFullYear();
+  const log=(S.logs[k])||{text:'',tomorrow:[]};
+  document.getElementById('mob-log-ta').value=log.text||'';
+  renderMobTmrList(log.tomorrow||[]);
+  renderMobLogHist();
+}
+
+function renderMobTmrList(list){
+  const el=document.getElementById('mob-tmr-list');el.innerHTML='';
+  list.forEach((item,i)=>{
+    const row=document.createElement('div');row.className='titem';
+    row.innerHTML=`<span>${esc(item)}</span><button class="tdel">✕</button>`;
+    row.querySelector('.tdel').onclick=()=>{
+      const k=selK()||todayK();
+      if(!S.logs[k])S.logs[k]={text:'',tomorrow:[]};
+      S.logs[k].tomorrow.splice(i,1);save();renderMobTmrList(S.logs[k].tomorrow);
+    };
+    el.appendChild(row);
+  });
+}
+
+function renderMobLogHist(){
+  const hist=document.getElementById('mob-log-hist');
+  const entries=Object.entries(S.logs).filter(([k,v])=>v.text).sort((a,b)=>b[0].localeCompare(a[0])).slice(0,5);
+  if(!entries.length){hist.innerHTML='<div class="nologs">No logs saved yet.</div>';return;}
+  hist.innerHTML='';
+  entries.forEach(([k,v])=>{
+    const d=new Date(k+'T00:00:00');
+    const div=document.createElement('div');div.className='lhi';
+    div.innerHTML=`<div class="lhd">${d.toLocaleDateString('en-IN',{weekday:'short',day:'numeric',month:'short',year:'numeric'}).toUpperCase()}</div><div class="lht">${esc(v.text.substring(0,80))}${v.text.length>80?'…':''}</div>`;
+    div.onclick=()=>{const p=k.split('-');selDay(+p[0],+p[1]-1,+p[2]);S.viewY=+p[0];S.viewM=+p[1]-1;mobSwitch('mob-log');};
+    hist.appendChild(div);
+  });
+}
+
+document.getElementById('mob-tmr-add').onclick=function(){
+  const v=document.getElementById('mob-tmr-in').value.trim();if(!v)return;
+  const k=selK()||todayK();
+  if(!S.logs[k])S.logs[k]={text:'',tomorrow:[]};
+  if(!S.logs[k].tomorrow)S.logs[k].tomorrow=[];
+  S.logs[k].tomorrow.push(v);
+  document.getElementById('mob-tmr-in').value='';
+  save();renderMobTmrList(S.logs[k].tomorrow);
+};
+document.getElementById('mob-tmr-in').addEventListener('keydown',e=>{if(e.key==='Enter')document.getElementById('mob-tmr-add').click();});
+
+document.getElementById('mob-save-log').onclick=function(){
+  const k=selK()||todayK();
+  if(!S.logs[k])S.logs[k]={text:'',tomorrow:[]};
+  S.logs[k].text=document.getElementById('mob-log-ta').value;
+  save();renderCal();renderMobLogHist();renderLogHist();
+  const btn=document.getElementById('mob-save-log');
+  btn.textContent='✓ Saved';btn.style.background='var(--green)';
+  setTimeout(()=>{btn.textContent='Save Log';btn.style.background='';},1800);
+};
+
 function mobInit(){if(!isMobile())return;document.getElementById('main').classList.add('mob-active');}
-window.addEventListener('resize',()=>{if(!isMobile()){document.getElementById('main').classList.remove('mob-active');document.getElementById('sidebar').classList.remove('mob-active');}else{mobInit();}});
+let _resizeDebounce=null;
+window.addEventListener('resize',()=>{
+  // PATCH P8: debounce to avoid DOM thrashing on every resize pixel
+  clearTimeout(_resizeDebounce);
+  _resizeDebounce=setTimeout(()=>{
+    if(!isMobile()){
+      document.getElementById('main').classList.remove('mob-active');
+      document.getElementById('sidebar').classList.remove('mob-active');
+      document.getElementById('mob-log-panel').classList.remove('mob-active');
+    }else{mobInit();}
+  },120);
+});
 mobInit();
+
+// PATCH C2: flush all running timers before tab close / refresh
+// so elapsed time is never silently discarded mid-session.
+window.addEventListener('beforeunload', () => {
+  Object.keys(S.timers).forEach(id => {
+    if (S.timers[id] && S.timers[id].active) stopTimer(id);
+  });
+});
 </script>
 </body>
 </html>
